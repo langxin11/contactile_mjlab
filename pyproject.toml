@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "contactile-mjlab"
+version = "0.1.0"
+description = "Contact-rich simulation experiments with mjlab and MuJoCo."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "mjlab>=1.3.0,<2",
+    "mujoco>=3.3.7,<4",
+    "numpy>=1.26",
+    "scipy>=1.17",
+]
+
+[project.optional-dependencies]
+cpu = [
+    "mjlab[cpu]>=1.3.0,<2",
+    "torch>=2.7.0",
+]
+
+cu128 = [
+    "mjlab[cu128]>=1.3.0,<2",
+    "torch>=2.7.0",
+]
+
+[dependency-groups]
+dev = [
+    "furo>=2025",
+    "pre-commit>=4.6.0",
+    "pytest>=9.0.3",
+    "ruff>=0.15.13",
+    "sphinx>=8",
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cu128" },
+    ],
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "cu128" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple"
+default = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+line-ending = "lf"
