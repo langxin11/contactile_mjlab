@@ -1,0 +1,27 @@
+<mujoco model="hanging_box">
+  <worldbody>
+    <body name="object" pos="0 0 0.154">
+      <freejoint name="object_root" />
+      <geom
+        name="grasp_box"
+        type="box"
+        size="0.012 0.012 0.018"
+        mass="0.05"
+        rgba="0.5 0.7 0.5 1"
+        friction="0.7 0.03 0.01"
+        priority="1"
+      />
+      <site name="hook" pos="0.012 0.012 0.018" size="0.002" />
+    </body>
+    <body name="anchor" pos="0 0 0.2">
+      <site name="anchor_site" size="0.002" />
+    </body>
+  </worldbody>
+
+  <tendon>
+    <spatial limited="true" range="0 0.02" width="0.001">
+      <site site="hook" />
+      <site site="anchor_site" />
+    </spatial>
+  </tendon>
+</mujoco>
