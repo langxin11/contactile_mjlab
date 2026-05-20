@@ -24,7 +24,7 @@
 
 .. code-block:: bash
 
-   uv run python -c "from contactile_mjlab import TactileGraspEnv; print('OK')"
+   uv run python -c "from contactile_mjlab import DEFAULT_TASK_ID, make_env; env = make_env(DEFAULT_TASK_ID); print('OK', env.num_envs)"
 
 Smoke test
 ----------
