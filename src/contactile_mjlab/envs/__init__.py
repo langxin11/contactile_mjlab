@@ -1,5 +1,5 @@
-"""Compatibility exports for tactile grasping environments."""
+"""Environment helpers backed by task-based tactile grasp configs."""
 
-from ..mjlab.tactile_grasp_env import TactileGraspEnv, TactileGraspEnvConfig
+from ..tasks.tactile_grasp import make_env
 
-__all__ = ["TactileGraspEnv", "TactileGraspEnvConfig"]
+__all__ = ["make_env"]

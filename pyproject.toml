@@ -74,6 +74,9 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[project.entry-points."mjlab.tasks"]
+contactile_mjlab = "contactile_mjlab"
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "D"]
 
