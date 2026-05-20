@@ -10,12 +10,13 @@ import mujoco.viewer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from contactile_mjlab.paths import TACTILE_SCENE_XML
+from contactile_mjlab.paths import PTS_SPHERES_SCENE_XML, TACTILE_SCENE_XML
 
 
 def main() -> None:
-    """Open the tactile scene in the interactive MuJoCo viewer."""
-    model = mujoco.MjModel.from_xml_path(str(TACTILE_SCENE_XML))
+    """Open a tactile scene in the interactive MuJoCo viewer."""
+    scene_xml = PTS_SPHERES_SCENE_XML if "--pts" in sys.argv else TACTILE_SCENE_XML
+    model = mujoco.MjModel.from_xml_path(str(scene_xml))
     data = mujoco.MjData(model)
     mujoco.viewer.launch(model, data, show_left_ui=True, show_right_ui=True)
 

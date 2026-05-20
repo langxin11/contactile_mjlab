@@ -10,7 +10,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from contactile_mjlab import TactileGraspEnv
+from contactile_mjlab import make_env
 
 
 def main() -> None:
@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument("--action", type=float, default=1.0)
     args = parser.parse_args()
 
-    env = TactileGraspEnv()
+    env = make_env()
     env.reset()
     robot = env.scene["robot"]
     gripper = env.action_manager.get_term("gripper_command")

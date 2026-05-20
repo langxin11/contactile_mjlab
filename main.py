@@ -9,12 +9,12 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from contactile_mjlab import TactileGraspEnv
+from contactile_mjlab import make_env
 
 
 def main() -> None:
     """Run a minimal mjlab reset/step to confirm the package loads."""
-    env = TactileGraspEnv()
+    env = make_env()
     observations, _ = env.reset()
     action = torch.zeros((env.num_envs, env.action_manager.total_action_dim), device=env.device)
     observations, reward, terminated, truncated, _ = env.step(action)

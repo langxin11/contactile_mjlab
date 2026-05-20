@@ -1,4 +1,9 @@
-# Robotiq 2F-85 + PTS 触觉抓取方案
+# Robotiq 2F-85 + PTS 触觉抓取路线与原则
+
+> 本文档的角色是“路线与原则”，不是“当前实现现状”。
+>
+> 当前仓库已经实现到哪一步、哪些能力已完成、哪些能力仍缺失，
+> 请以 `docs/source/design/task_architecture.rst` 为准。
 
 ## 目的
 
@@ -90,7 +95,7 @@ MuJoCo 内部接触信息可以用于奖励、终止条件和调试，但不应�
 - 触觉观测尽量贴近真实 PTS 可提供的信息形态
 - 逐步加入噪声、零偏、灵敏度差异、动作延迟和接触参数随机化
 
-## 当前里程碑
+## 当前里程碑定义
 
 当前阶段的成功标准不是完整 sim2real，而是先建立一个可靠的 tactile gripper baseline：
 
@@ -99,4 +104,11 @@ MuJoCo 内部接触信息可以用于奖励、终止条件和调试，但不应�
 - 环境 API 稳定
 - 能训练出一个基础抓取策略
 
-后续实现细节、仓库执行约束和第一阶段接口规范，应分别放到独立文档中维护，而不是继续堆在本文件里。
+实现细节、当前代码入口、已完成项 / 未完成项，不再堆在本文件里维护。
+这些内容统一收口到 `docs/source/design/` 下的实现文档，尤其是：
+
+- `task_architecture.rst`：当前实现现状总览
+- `tactile_pipeline.rst`：触觉信号链路
+- `reward_design.rst`：奖励与终止
+- `control_pipeline.rst`：动作与训练配置
+- `pts_taxel_scheme.rst`：PTS sphere-taxel 建模

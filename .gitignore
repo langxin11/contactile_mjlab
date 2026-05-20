@@ -11,3 +11,10 @@ wheels/
 
 .cache/
 docs/_build/
+
+*egg-info/
+
+# Runtime artifacts
+artifacts/
+wandb/
+docs/_build_*/

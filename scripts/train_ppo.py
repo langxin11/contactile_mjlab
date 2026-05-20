@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from contactile_mjlab import (
-    TactileGraspEnv,
-    TactileGraspEnvConfig,
-    tactile_grasp_ppo_runner_cfg,
-)
+from contactile_mjlab import DEFAULT_TASK_ID, load_env_cfg, load_rl_cfg, load_runner_cls
 
 try:
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
@@ -25,25 +22,33 @@ except ImportError as exc:  # pragma: no cover - runtime dependency gate
 def main() -> None:
     """Train a PPO baseline and save checkpoints with mjlab's runner."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--task-id", type=str, default=DEFAULT_TASK_ID)
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--num-envs", type=int, default=64)
     parser.add_argument("--episode-length-s", type=float, default=3.0)
+    parser.add_argument("--max-iterations", type=int, default=None)
     parser.add_argument("--log-dir", type=Path, default=Path("artifacts/rsl_rl/contactile_mjlab"))
     args = parser.parse_args()
 
-    env = TactileGraspEnv(
-        TactileGraspEnvConfig(
+    from mjlab.envs import ManagerBasedRlEnv
+
+    env = ManagerBasedRlEnv(
+        load_env_cfg(
+            args.task_id,
             num_envs=args.num_envs,
             episode_length_s=args.episode_length_s,
         ),
         device=args.device,
     )
     vec_env = RslRlVecEnvWrapper(env)
-    runner_cfg = tactile_grasp_ppo_runner_cfg()
+    runner_cfg = load_rl_cfg(args.task_id)
+    if args.max_iterations is not None:
+        runner_cfg.max_iterations = args.max_iterations
+    runner_cls = load_runner_cls(args.task_id) or MjlabOnPolicyRunner
     args.log_dir.mkdir(parents=True, exist_ok=True)
-    runner = MjlabOnPolicyRunner(
+    runner = runner_cls(
         vec_env,
-        train_cfg=runner_cfg.to_dict(),
+        train_cfg=asdict(runner_cfg),
         log_dir=str(args.log_dir),
         device=args.device,
     )
@@ -51,7 +56,7 @@ def main() -> None:
         num_learning_iterations=runner_cfg.max_iterations,
         init_at_random_ep_len=False,
     )
-    print(f"log_dir={args.log_dir}")
+    print(f"task_id={args.task_id} log_dir={args.log_dir}")
 
 
 if __name__ == "__main__":

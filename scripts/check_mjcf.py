@@ -10,7 +10,13 @@ import mujoco
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from contactile_mjlab.paths import BASE_XML, TACTILE_SCENE_XML, TACTILE_XML
+from contactile_mjlab.paths import (
+    BASE_XML,
+    PTS_SPHERES_SCENE_XML,
+    PTS_SPHERES_XML,
+    TACTILE_SCENE_XML,
+    TACTILE_XML,
+)
 
 
 def _check(path: Path) -> None:
@@ -27,7 +33,13 @@ def main() -> None:
     parser.add_argument("paths", nargs="*", type=Path)
     args = parser.parse_args()
 
-    paths = args.paths or [BASE_XML, TACTILE_XML, TACTILE_SCENE_XML]
+    paths = args.paths or [
+        BASE_XML,
+        TACTILE_XML,
+        TACTILE_SCENE_XML,
+        PTS_SPHERES_XML,
+        PTS_SPHERES_SCENE_XML,
+    ]
     for path in paths:
         _check(path.resolve())
 
