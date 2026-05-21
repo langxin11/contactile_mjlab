@@ -102,12 +102,15 @@ class stable_grasp_hold:
     ) -> torch.Tensor:
         """Return a done mask for stable, sustained grasps."""
         height_ok = object_height(env, asset_cfg=asset_cfg) > minimum_height
-        touch_ok = total_tactile_signal(
-            env,
-            left_sensor_names=left_sensor_names,
-            right_sensor_names=right_sensor_names,
-            entity_name=entity_name,
-        ) > minimum_tactile_signal
+        touch_ok = (
+            total_tactile_signal(
+                env,
+                left_sensor_names=left_sensor_names,
+                right_sensor_names=right_sensor_names,
+                entity_name=entity_name,
+            )
+            > minimum_tactile_signal
+        )
         stable = height_ok & touch_ok
         self._counter = torch.where(stable, self._counter + 1, torch.zeros_like(self._counter))
         return self._counter >= hold_steps

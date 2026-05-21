@@ -14,6 +14,8 @@ PTS Sphere-Taxel 建模
 - ``assets/robotiq_2f85/scene_pts_spheres.xml``：带 object 的主线场景
 
 这三层是“派生”关系，不覆盖原始文件。
+其中 ``2f85_pts_spheres.xml`` 现在可以通过
+``scripts/generate_pts_spheres_xml.py`` 从 ``2f85.xml`` 重复生成，不再依赖手工维护。
 
 当前建模原则
 ------------
@@ -23,13 +25,13 @@ PTS Sphere-Taxel 建模
 - 左右指各 9 个 sphere taxel geom
 - 每个 taxel geom 对应一个 builtin ``<force>`` sensor
 - 每侧仍保留一个全局 pad ``force`` / ``torque`` 参考 site
+- taxel site 坐标系绕 pad 局部 Y 轴旋转 ``-90°``，用于定义传感器坐标系
 - 旧 touch site 不出现在 ``PTSSpheres`` 模型里，只保留在 ``TouchSite`` 对照模型中
 
 当前没有做的事同样明确：
 
 - 不拆分 pad collision geom
 - 不引入额外的 PTS visual-only 网格资产
-- 不做 per-taxel local frame 定义
 
 XML 结构
 --------
@@ -76,14 +78,19 @@ XML 结构
 参数                   当前值
 ====================== ==========================
 taxel geom type        ``sphere``
-sphere radius          ``0.0014`` m
+sphere radius          ``0.0028`` m
 taxel site size        ``0.0008`` m
+taxel site quat        ``1 0 -1 0``
 taxel geom mass        ``1e-6``
 taxel geom friction    ``0.7 0.03 0.01``
 taxel geom solimp      ``0.95 0.99 0.001``
 taxel geom solref      ``0.004 1``
 taxel geom priority    ``2``
 ====================== ==========================
+
+``taxel site quat`` 会被 MuJoCo 归一化，等价于绕 pad 局部 Y 轴旋转 ``-90°``：
+``site.Z = -pad.X`` 指向接触法向内侧，``site.X = +pad.Z`` 沿 pad 长度指向指尖，
+``site.Y = +pad.Y`` 保持横向。
 
 文档里不再保留未写入当前 XML 的 ``condim``、替代 ``solimp`` 或其他候选参数说明。
 
@@ -100,5 +107,6 @@ taxel geom priority    ``2``
 相关页面
 --------
 
+- 坐标系检查推荐使用 ``scripts/inspect_pts_frames.py``，可直接查看 pad 与 taxel site/sensor 的局部坐标系。
 - :doc:`task_architecture`
 - :doc:`tactile_pipeline`

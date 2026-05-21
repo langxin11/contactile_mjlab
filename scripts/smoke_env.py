@@ -49,8 +49,7 @@ def _run_task(task_id: str, steps: int) -> None:
 
     print("done")
     print(
-        f"steps={step} terminated={terminated.cpu().tolist()} "
-        f"truncated={truncated.cpu().tolist()}"
+        f"steps={step} terminated={terminated.cpu().tolist()} truncated={truncated.cpu().tolist()}"
     )
     print(f"final_reward={float(reward[0].cpu().item()):.6f}")
     print(f"first_touch_step={first_touch_step}")

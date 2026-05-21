@@ -86,6 +86,8 @@
 - ``smoke_env.py`` — 环境随机动作 smoke test
 - ``test_gripper_ctrl.py`` — 单独测试夹爪控制回路
 - ``visualize_taxels.py`` — 触觉阵列可视化
+- ``inspect_pts_frames.py`` — 用 ``mjviser`` 动态推进并查看 PTSSpheres 的 pad / taxel site/sensor 局部坐标系
+- ``generate_pts_spheres_xml.py`` — 从 ``2f85.xml`` 生成 ``2f85_pts_spheres.xml``
 - ``check_mjcf.py`` — MJCF 模型加载检查
 - ``view_env.py`` — 环境可视化
 - ``train_ppo.py`` — PPO 训练入口
