@@ -45,8 +45,8 @@
 
 - policy observation 不应依赖 MuJoCo 内部接触真值
 - MuJoCo 内部真值可以用于 reward、termination 和 debug
-- 当前触觉是 builtin `<force>` sensor 的 world-frame 三轴力直读
-- 当前未实现 local-frame tactile、history、slip proxy
+- 当前触觉是 builtin `<force>` sensor 的 site-local frame 三轴力直读（site 已绕 Y 轴旋转，使 `site.Z` 对齐 pad 法向）
+- 当前未实现 normal / tangential 分量拆分、history buffer、slip proxy
 
 ## 代码组织约束
 

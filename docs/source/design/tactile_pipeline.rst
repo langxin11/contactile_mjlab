@@ -78,7 +78,7 @@ Pad force             ``1 / force_scale``，默认 ``1 / 20``
 
 这个选择的代价也明确存在：
 
-- ``PTSSpheres`` 当前读到的是 world-frame 三轴力
+- 当前 taxel 读到的是 site-local frame 三轴力（site 已绕 Y 轴旋转 −90°，使 ``site.Z`` 指向 pad 法向；``site.X`` / ``site.Y`` 为切向）
 - 当前不区分“来自目标物体”的接触和“来自其他几何”的接触
 - 当前没有时间历史缓冲
 
