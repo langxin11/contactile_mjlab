@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import mujoco
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
+from mjlab.entity.entity import TransmissionType
 
 from .mdp.actions import RobotiqCommandActionCfg
 from .mdp.actuators import RobotiqGeneralActuatorCfg
@@ -23,7 +24,7 @@ def build_robot_cfg() -> EntityCfg:
             actuators=(
                 RobotiqGeneralActuatorCfg(
                     target_names_expr=("split",),
-                    transmission_type="tendon",
+                    transmission_type=TransmissionType.TENDON,
                 ),
             )
         ),
