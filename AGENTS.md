@@ -53,7 +53,7 @@
 
 - `assets/`：MJCF、XML、贴图等仿真资源
 - `src/tactile_grasp/`：主线 task 配置、触觉、奖励、PPO 配置
-- `src/tactile_grasp/_mdp_legacy/`：legacy 兼容与底层封装（Task 5 拆入正式 mdp/）
+- `src/tactile_grasp/mdp/`：actions / observations / rewards / events / terminations 五块
 - `scripts/`：调试、可视化、smoke test、训练入口
 - `docs/source/`：用户文档、设计文档、API 文档
 
