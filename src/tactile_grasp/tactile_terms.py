@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from ...mjlab.action_terms import RobotiqCommandAction
+from ._mdp_legacy.actions import RobotiqCommandAction
 
 if TYPE_CHECKING:
     from mjlab.envs import ManagerBasedRlEnv

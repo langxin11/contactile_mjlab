@@ -5,7 +5,7 @@ from __future__ import annotations
 import mujoco
 from mjlab.entity import EntityCfg
 
-from ...paths import PROPS_DIR
+from .paths import PROPS_DIR
 
 
 def object_spec() -> mujoco.MjSpec:

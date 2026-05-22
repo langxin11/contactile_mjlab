@@ -1,4 +1,4 @@
-# contactile-mjlab
+# tactile-grasp
 
 基于 MuJoCo / mjlab 的触觉抓取强化学习实验环境。
 
@@ -21,7 +21,7 @@ uv run python main.py
 
 ```text
 assets/    — MJCF 模型与道具
-src/       — Python 包 (contactile_mjlab)
+src/       — Python 包 (tactile_grasp)
 scripts/   — 调试与训练脚本
 docs/      — Sphinx 文档
 ```

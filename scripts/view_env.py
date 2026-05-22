@@ -6,7 +6,7 @@ import argparse
 
 import torch
 
-from contactile_mjlab import TASK_ID, make_env
+from tactile_grasp import TASK_ID, make_env
 
 
 def main() -> None:

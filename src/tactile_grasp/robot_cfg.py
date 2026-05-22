@@ -5,9 +5,9 @@ from __future__ import annotations
 import mujoco
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 
-from ...mjlab.action_terms import RobotiqCommandActionCfg
-from ...mjlab.actuators import RobotiqGeneralActuatorCfg
-from ...paths import PTS_SPHERES_XML
+from ._mdp_legacy.actions import RobotiqCommandActionCfg
+from ._mdp_legacy.actuators import RobotiqGeneralActuatorCfg
+from .paths import PTS_SPHERES_XML
 
 
 def robot_spec() -> mujoco.MjSpec:

@@ -7,8 +7,8 @@ from pathlib import Path
 import mujoco
 import pytest
 
-import contactile_mjlab
-from contactile_mjlab import paths
+import tactile_grasp
+from tactile_grasp import paths
 
 
 @pytest.mark.parametrize(
@@ -25,7 +25,7 @@ from contactile_mjlab import paths
 def test_xml_loadable(xml_path: Path) -> None:
     """Each shipped XML must exist, live inside the package, and parse via MuJoCo."""
     assert xml_path.is_file(), f"missing: {xml_path}"
-    package_dir = Path(contactile_mjlab.__file__).resolve().parent
+    package_dir = Path(tactile_grasp.__file__).resolve().parent
     resolved = xml_path.resolve()
     assert package_dir in resolved.parents, (
         f"{xml_path} is not under packaged dir {package_dir}; assets must ship with the wheel."

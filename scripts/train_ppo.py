@@ -9,7 +9,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from contactile_mjlab import DEFAULT_TASK_ID, load_env_cfg, load_rl_cfg, load_runner_cls
+from tactile_grasp import TASK_ID as DEFAULT_TASK_ID
+from tactile_grasp import load_env_cfg, load_rl_cfg, load_runner_cls
 
 try:
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
@@ -27,7 +28,7 @@ def main() -> None:
     parser.add_argument("--num-envs", type=int, default=64)
     parser.add_argument("--episode-length-s", type=float, default=3.0)
     parser.add_argument("--max-iterations", type=int, default=None)
-    parser.add_argument("--log-dir", type=Path, default=Path("artifacts/rsl_rl/contactile_mjlab"))
+    parser.add_argument("--log-dir", type=Path, default=Path("artifacts/rsl_rl/tactile_grasp"))
     args = parser.parse_args()
 
     from mjlab.envs import ManagerBasedRlEnv

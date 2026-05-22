@@ -1,4 +1,4 @@
-"""tactile_grasp 任务注册与便利入口."""
+"""tactile_grasp: Robotiq 2F-85 + PTS spheres 触觉抓取任务包."""
 
 from __future__ import annotations
 

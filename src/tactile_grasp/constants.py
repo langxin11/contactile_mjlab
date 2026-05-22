@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from mjlab.managers import SceneEntityCfg
 
-TASK_ID = "Mjlab-TactileGrasp-Robotiq2F85-PTSSpheres"
+TASK_ID = "Mjlab-TactileGrasp-Robotiq2F85"
 
 # 触觉成功判定阈值（单值）
 TACTILE_ACTIVITY_THRESHOLD = 1.0e-3

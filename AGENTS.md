@@ -23,11 +23,11 @@
 
 当前主线是 task-based API，不再以 legacy 单文件环境作为推荐入口。
 
-- 包根入口：`contactile_mjlab.make_env()`
-- 环境配置入口：`contactile_mjlab.load_env_cfg()`
-- PPO 配置入口：`contactile_mjlab.load_rl_cfg()`
-- 主线实现目录：`src/contactile_mjlab/tasks/tactile_grasp/`
-- legacy 调试目录：`src/contactile_mjlab/mjlab/`
+- 包根入口：`tactile_grasp.make_env()`
+- 环境配置入口：`tactile_grasp.load_env_cfg()`
+- PPO 配置入口：`tactile_grasp.load_rl_cfg()`
+- 主线实现目录：`src/tactile_grasp/`
+- legacy 调试目录：`src/tactile_grasp/_mdp_legacy/`
 
 当前保留两个任务：
 
@@ -56,8 +56,8 @@
 ## 代码组织约束
 
 - `assets/`：MJCF、XML、贴图等仿真资源
-- `src/contactile_mjlab/tasks/tactile_grasp/`：主线 task 配置、触觉、奖励、PPO 配置
-- `src/contactile_mjlab/mjlab/`：legacy 兼容与底层封装
+- `src/tactile_grasp/`：主线 task 配置、触觉、奖励、PPO 配置
+- `src/tactile_grasp/_mdp_legacy/`：legacy 兼容与底层封装（Task 5 拆入正式 mdp/）
 - `scripts/`：调试、可视化、smoke test、训练入口
 - `docs/source/`：用户文档、设计文档、API 文档
 

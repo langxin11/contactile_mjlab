@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from contactile_mjlab.paths import BASE_XML, PTS_SPHERES_XML
+from tactile_grasp.paths import BASE_XML, PTS_SPHERES_XML
 
 
 @dataclass(frozen=True)

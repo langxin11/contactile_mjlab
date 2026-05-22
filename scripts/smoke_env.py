@@ -9,7 +9,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from contactile_mjlab import make_env
+from tactile_grasp import make_env
 
 
 def main() -> None:
@@ -19,7 +19,7 @@ def main() -> None:
     action = torch.zeros((env.num_envs, env.action_manager.total_action_dim), device=env.device)
     observations, reward, terminated, truncated, _ = env.step(action)
     print(
-        "contactile-mjlab ready: "
+        "tactile-grasp ready: "
         f"actor_obs_shape={tuple(observations['actor'].shape)} "
         f"reward_shape={tuple(reward.shape)} "
         f"terminated={terminated.cpu().tolist()} truncated={truncated.cpu().tolist()}"

@@ -1,4 +1,4 @@
-"""Asset paths shipped with the contactile_mjlab package.
+"""Asset paths shipped with the tactile_grasp package.
 
 All paths are derived from ``__file__`` so they remain correct whether the
 package is run from a source checkout or installed in site-packages.

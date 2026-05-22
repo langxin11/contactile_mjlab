@@ -3,7 +3,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "contactile-mjlab"
+name = "tactile-grasp"
 version = "0.1.0"
 description = "Contact-rich simulation experiments with mjlab and MuJoCo."
 readme = "README.md"
@@ -75,9 +75,10 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["tactile_grasp*"]
 
 [tool.setuptools.package-data]
-contactile_mjlab = [
+tactile_grasp = [
     "assets/**/*.xml",
     "assets/**/*.stl",
     "assets/**/*.obj",
@@ -86,7 +87,7 @@ contactile_mjlab = [
 ]
 
 [project.entry-points."mjlab.tasks"]
-contactile_mjlab = "contactile_mjlab"
+tactile_grasp = "tactile_grasp"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "D"]

@@ -37,7 +37,7 @@ def tactile_grasp_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
             desired_kl=0.01,
             max_grad_norm=1.0,
         ),
-        experiment_name="contactile_mjlab",
+        experiment_name="tactile_grasp",
         logger="tensorboard",
         save_interval=50,
         upload_model=False,

@@ -11,7 +11,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from contactile_mjlab import TASK_ID, make_env
+from tactile_grasp import TASK_ID, make_env
 
 
 def main() -> None:
