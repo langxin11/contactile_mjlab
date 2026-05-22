@@ -27,7 +27,7 @@
 - 环境配置入口：`tactile_grasp.load_env_cfg()`
 - PPO 配置入口：`tactile_grasp.load_rl_cfg()`
 - 主线实现目录：`src/tactile_grasp/`
-- legacy 调试目录：`src/tactile_grasp/_mdp_legacy/`
+- mdp 子包：`src/tactile_grasp/mdp/`（actions / observations / rewards / events / terminations）
 
 当前注册任务：`Mjlab-TactileGrasp-Robotiq2F85`（PTS spheres 触觉传感器单一实现，TouchSite 路径已删除）。
 
@@ -45,8 +45,9 @@
 
 - policy observation 不应依赖 MuJoCo 内部接触真值
 - MuJoCo 内部真值可以用于 reward、termination 和 debug
-- 当前触觉是 builtin `<force>` sensor 的 site-local frame 三轴力直读（site 已绕 Y 轴旋转，使 `site.Z` 对齐 pad 法向）
-- 当前未实现 normal / tangential 分量拆分、history buffer、slip proxy
+- 当前触觉已拆 normal / tangential：site-local frame 法向分量（`site.Z`，9 维）与切向分量（`site.X/Y`，18 维）分别作为独立观测项
+- 当前 taxel 观测带 history buffer（taxel `history_length=5`，pad wrench `history_length=3`）
+- 当前未实现 slip proxy、`data.contact` 真值过滤、time-domain 频谱特征
 
 ## 代码组织约束
 
@@ -77,8 +78,8 @@
 - 包加载检查：`uv run python main.py`
 - MJCF 编译检查：`uv run python scripts/check_mjcf.py`
 - 环境 smoke test：`uv run python scripts/smoke_env.py --steps 40`
-- Viewer：`uv run python scripts/view_env.py --task-id Mjlab-TactileGrasp-Robotiq2F85 --device cpu`
-- 最小训练：`uv run python scripts/train_ppo.py --task-id Mjlab-TactileGrasp-Robotiq2F85 --device cpu --num-envs 8 --episode-length-s 0.5 --max-iterations 1`
+- Viewer：`uv run python scripts/view_env.py --device cpu`
+- 最小训练（mjlab 入口）：`WANDB_MODE=offline uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 --agent.max-iterations 2 --env.scene.num-envs 4 --env.episode-length-s 0.5 --gpu-ids None`
 
 ## 必做验证
 
@@ -96,7 +97,7 @@
 
 ### 改了训练相关代码
 
-- `uv run python scripts/train_ppo.py --task-id Mjlab-TactileGrasp-Robotiq2F85 --device cpu --num-envs 8 --episode-length-s 0.5 --max-iterations 1`
+- `WANDB_MODE=offline uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 --agent.max-iterations 2 --env.scene.num-envs 4 --env.episode-length-s 0.5 --gpu-ids None`
 
 ### 改了 Python 代码
 
