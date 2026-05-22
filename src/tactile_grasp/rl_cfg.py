@@ -1,4 +1,4 @@
-"""RL runner configuration for tactile grasp tasks."""
+"""tactile_grasp PPO training configuration."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ from mjlab.rl import RslRlModelCfg, RslRlOnPolicyRunnerCfg, RslRlPpoAlgorithmCfg
 
 
 def tactile_grasp_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
-    """Return the PPO runner config used by the tactile grasp tasks."""
+    """Baseline PPO runner cfg for tactile_grasp."""
     return RslRlOnPolicyRunnerCfg(
         actor=RslRlModelCfg(
-            hidden_dims=(128, 128),
+            hidden_dims=(256, 256),
             activation="elu",
-            obs_normalization=False,
+            obs_normalization=True,
             distribution_cfg={
                 "class_name": "GaussianDistribution",
                 "init_std": 1.0,
@@ -19,9 +19,9 @@ def tactile_grasp_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
             },
         ),
         critic=RslRlModelCfg(
-            hidden_dims=(128, 128),
+            hidden_dims=(256, 256),
             activation="elu",
-            obs_normalization=False,
+            obs_normalization=True,
         ),
         algorithm=RslRlPpoAlgorithmCfg(
             value_loss_coef=1.0,
@@ -38,9 +38,10 @@ def tactile_grasp_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
             max_grad_norm=1.0,
         ),
         experiment_name="tactile_grasp",
-        logger="tensorboard",
+        logger="wandb",
+        wandb_project="tactile_grasp",
         save_interval=50,
         upload_model=False,
-        num_steps_per_env=32,
-        max_iterations=200,
+        num_steps_per_env=48,
+        max_iterations=3000,
     )
