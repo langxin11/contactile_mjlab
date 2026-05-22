@@ -1,9 +1,10 @@
-"""mjlab-native task components for contactile-mjlab."""
+"""mjlab-native action / actuator wrappers."""
 
-from .tactile_grasp_env import (
-    TactileGraspEnv,
-    TactileGraspEnvConfig,
-    tactile_grasp_ppo_runner_cfg,
-)
+from .action_terms import RobotiqCommandAction, RobotiqCommandActionCfg
+from .actuators import RobotiqGeneralActuatorCfg
 
-__all__ = ["TactileGraspEnv", "TactileGraspEnvConfig", "tactile_grasp_ppo_runner_cfg"]
+__all__ = [
+    "RobotiqCommandAction",
+    "RobotiqCommandActionCfg",
+    "RobotiqGeneralActuatorCfg",
+]
