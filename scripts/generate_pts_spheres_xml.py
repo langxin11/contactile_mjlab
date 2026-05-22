@@ -19,10 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-ASSETS_DIR = PROJECT_ROOT / "assets" / "robotiq_2f85"
-BASE_XML = ASSETS_DIR / "2f85.xml"
-PTS_SPHERES_XML = ASSETS_DIR / "2f85_pts_spheres.xml"
+from tactile_grasp.paths import BASE_XML, PTS_SPHERES_XML
 
 
 @dataclass(frozen=True)

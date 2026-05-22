@@ -17,4 +17,5 @@ docs/_build/
 # Runtime artifacts
 artifacts/
 wandb/
+logs/
 docs/_build_*/

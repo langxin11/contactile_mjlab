@@ -1,4 +1,4 @@
-# contactile-mjlab
+# tactile-grasp
 
 基于 MuJoCo / mjlab 的触觉抓取强化学习实验环境。
 
@@ -7,18 +7,23 @@
 ## 快速开始
 
 ```bash
-# CPU 后端
-uv sync --extra cpu --group dev
+uv sync --extra cu128 --group dev
 
-# 验证
-uv run python main.py
+# 极简 smoke
+uv run python scripts/smoke_env.py
+
+# 训练
+uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 --agent.max-iterations 100
+
+# 回放
+uv run python scripts/play.py Mjlab-TactileGrasp-Robotiq2F85
 ```
 
 ## 目录
 
 ```text
 assets/    — MJCF 模型与道具
-src/       — Python 包 (contactile_mjlab)
+src/       — Python 包 (tactile_grasp)
 scripts/   — 调试与训练脚本
 docs/      — Sphinx 文档
 ```
@@ -36,4 +41,4 @@ cd docs && uv run sphinx-build -b html source _build
 - **V1** — 3×3 法向触觉阵列（当前阶段）
 - **V2** — 触觉阵列 + wrench + slip proxy
 
-详见 `plan.md`。
+详见 `docs/superpowers/specs/2026-05-22-mjlab-idiom-refactor-design.md`。

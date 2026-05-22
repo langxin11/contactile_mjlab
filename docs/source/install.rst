@@ -22,13 +22,17 @@
 验证导入
 --------
 
-.. code-block:: bash
+.. code-block:: python
 
-   uv run python -c "from contactile_mjlab import DEFAULT_TASK_ID, make_env; env = make_env(DEFAULT_TASK_ID); print('OK', env.num_envs)"
+   import tactile_grasp
+
+   env = tactile_grasp.make_env(play=True)
+   obs, _ = env.reset()
+   print(obs["actor"].shape)  # torch.Size([1, 320])
 
 Smoke test
 ----------
 
 .. code-block:: bash
 
-   uv run python main.py
+   PYTHONPATH= uv run python scripts/smoke_env.py

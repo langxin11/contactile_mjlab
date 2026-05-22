@@ -10,7 +10,7 @@ import mujoco
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from contactile_mjlab.paths import (
+from tactile_grasp.paths import (
     BASE_XML,
     PTS_SPHERES_SCENE_XML,
     PTS_SPHERES_XML,

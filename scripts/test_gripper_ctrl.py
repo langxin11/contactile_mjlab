@@ -10,7 +10,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from contactile_mjlab import make_env
+from tactile_grasp import make_env
 
 
 def main() -> None:

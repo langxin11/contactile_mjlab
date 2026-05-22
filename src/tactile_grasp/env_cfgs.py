@@ -1,0 +1,180 @@
+"""tactile_grasp 任务的环境 cfg 构造（mjlab idiom）."""
+
+from __future__ import annotations
+
+from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.envs.mdp import joint_pos_rel, joint_vel_rel, last_action, time_out
+from mjlab.managers import (
+    EventTermCfg,
+    ObservationGroupCfg,
+    ObservationTermCfg,
+    RewardTermCfg,
+    TerminationTermCfg,
+)
+from mjlab.scene import SceneCfg
+from mjlab.sim import MujocoCfg, SimulationCfg
+from mjlab.viewer import ViewerConfig
+
+from .constants import (
+    LEFT_TAXEL_FORCE_SENSOR_NAMES,
+    OBJECT_CFG,
+    RIGHT_TAXEL_FORCE_SENSOR_NAMES,
+    ROBOT_JOINT_CFG,
+    TACTILE_ACTIVITY_THRESHOLD,
+)
+from .mdp import events, rewards, terminations
+from .mdp import observations as obs
+from .object_cfg import build_object_cfg
+from .robot_cfg import build_action_cfg, build_robot_cfg
+
+DECIMATION = 10
+TIMESTEP = 0.002
+EPISODE_LENGTH_S = 3.0
+PLAY_EPISODE_LENGTH_S = 6.0
+
+DELTA_U_MAX = 3.0
+
+NORMAL_FORCE_SCALE = 5.0
+TANGENTIAL_FORCE_SCALE = 2.0
+FORCE_SCALE = 20.0
+TORQUE_SCALE = 2.0
+
+TACTILE_HISTORY_LENGTH = 5
+WRENCH_HISTORY_LENGTH = 3
+
+NUM_ENVS = 64
+PLAY_NUM_ENVS = 1
+ENV_SPACING = 0.5
+
+DROP_HEIGHT = 0.08
+SUCCESS_HEIGHT = 0.14
+SUCCESS_HOLD_STEPS = 25
+
+W_ALIVE = 1.0
+W_TACTILE_FORCE = -0.01
+W_ACTION_RATE = -0.001
+W_CLOSE_COMMAND = -0.001
+W_DROP_PENALTY = -5.0
+
+
+def _actor_observation_terms() -> dict[str, ObservationTermCfg]:
+    """Build the actor observation term dict (kept private to env_cfgs)."""
+    return {
+        "left_taxel_normal": ObservationTermCfg(
+            func=obs.taxel_normal_force,
+            params={"sensor_names": LEFT_TAXEL_FORCE_SENSOR_NAMES},
+            scale=1.0 / NORMAL_FORCE_SCALE,
+            history_length=TACTILE_HISTORY_LENGTH,
+        ),
+        "left_taxel_tangential": ObservationTermCfg(
+            func=obs.taxel_tangential_force,
+            params={"sensor_names": LEFT_TAXEL_FORCE_SENSOR_NAMES},
+            scale=1.0 / TANGENTIAL_FORCE_SCALE,
+            history_length=TACTILE_HISTORY_LENGTH,
+        ),
+        "right_taxel_normal": ObservationTermCfg(
+            func=obs.taxel_normal_force,
+            params={"sensor_names": RIGHT_TAXEL_FORCE_SENSOR_NAMES},
+            scale=1.0 / NORMAL_FORCE_SCALE,
+            history_length=TACTILE_HISTORY_LENGTH,
+        ),
+        "right_taxel_tangential": ObservationTermCfg(
+            func=obs.taxel_tangential_force,
+            params={"sensor_names": RIGHT_TAXEL_FORCE_SENSOR_NAMES},
+            scale=1.0 / TANGENTIAL_FORCE_SCALE,
+            history_length=TACTILE_HISTORY_LENGTH,
+        ),
+        "left_pad_force": ObservationTermCfg(
+            func=obs.pad_force,
+            params={"sensor_name": "left_pad_force"},
+            scale=1.0 / FORCE_SCALE,
+            history_length=WRENCH_HISTORY_LENGTH,
+        ),
+        "left_pad_torque": ObservationTermCfg(
+            func=obs.pad_torque,
+            params={"sensor_name": "left_pad_torque"},
+            scale=1.0 / TORQUE_SCALE,
+            history_length=WRENCH_HISTORY_LENGTH,
+        ),
+        "right_pad_force": ObservationTermCfg(
+            func=obs.pad_force,
+            params={"sensor_name": "right_pad_force"},
+            scale=1.0 / FORCE_SCALE,
+            history_length=WRENCH_HISTORY_LENGTH,
+        ),
+        "right_pad_torque": ObservationTermCfg(
+            func=obs.pad_torque,
+            params={"sensor_name": "right_pad_torque"},
+            scale=1.0 / TORQUE_SCALE,
+            history_length=WRENCH_HISTORY_LENGTH,
+        ),
+        "gripper_command": ObservationTermCfg(func=obs.gripper_command),
+        "joint_pos": ObservationTermCfg(func=joint_pos_rel, params={"asset_cfg": ROBOT_JOINT_CFG}),
+        "joint_vel": ObservationTermCfg(func=joint_vel_rel, params={"asset_cfg": ROBOT_JOINT_CFG}),
+        "last_action": ObservationTermCfg(func=last_action),
+    }
+
+
+def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+    """Build the tactile_grasp env cfg; if play=True, apply play overrides to the fresh cfg."""
+    actor_terms = _actor_observation_terms()
+
+    cfg = ManagerBasedRlEnvCfg(
+        scene=SceneCfg(
+            entities={"robot": build_robot_cfg(), "object": build_object_cfg()},
+            num_envs=NUM_ENVS,
+            env_spacing=ENV_SPACING,
+        ),
+        observations={
+            "actor": ObservationGroupCfg(actor_terms, enable_corruption=False),
+            "critic": ObservationGroupCfg(dict(actor_terms), enable_corruption=False),
+        },
+        actions={"gripper_command": build_action_cfg(DELTA_U_MAX)},
+        events={
+            "reset_scene_to_default": EventTermCfg(func=events.reset_scene_to_default, mode="reset")
+        },
+        rewards={
+            "alive": RewardTermCfg(func=rewards.alive, weight=W_ALIVE),
+            "tactile_force": RewardTermCfg(
+                func=rewards.tactile_force_l2,
+                weight=W_TACTILE_FORCE,
+                params={
+                    "left_sensor_names": LEFT_TAXEL_FORCE_SENSOR_NAMES,
+                    "right_sensor_names": RIGHT_TAXEL_FORCE_SENSOR_NAMES,
+                },
+            ),
+            "action_rate": RewardTermCfg(func=rewards.action_l2, weight=W_ACTION_RATE),
+            "close_command": RewardTermCfg(func=rewards.close_command_l2, weight=W_CLOSE_COMMAND),
+            "drop_penalty": RewardTermCfg(func=rewards.drop_penalty, weight=W_DROP_PENALTY),
+        },
+        terminations={
+            "time_out": TerminationTermCfg(func=time_out, time_out=True),
+            "object_drop": TerminationTermCfg(
+                func=terminations.object_height_below,
+                params={"minimum_height": DROP_HEIGHT, "asset_cfg": OBJECT_CFG},
+            ),
+            "stable_grasp": TerminationTermCfg(
+                func=terminations.stable_grasp_hold,
+                params={
+                    "hold_steps": SUCCESS_HOLD_STEPS,
+                    "minimum_height": SUCCESS_HEIGHT,
+                    "minimum_tactile_signal": TACTILE_ACTIVITY_THRESHOLD,
+                    "left_sensor_names": LEFT_TAXEL_FORCE_SENSOR_NAMES,
+                    "right_sensor_names": RIGHT_TAXEL_FORCE_SENSOR_NAMES,
+                    "asset_cfg": OBJECT_CFG,
+                },
+            ),
+        },
+        sim=SimulationCfg(mujoco=MujocoCfg(timestep=TIMESTEP, cone="elliptic", impratio=10.0)),
+        viewer=ViewerConfig(),
+        decimation=DECIMATION,
+        episode_length_s=EPISODE_LENGTH_S,
+        auto_reset=True,
+    )
+
+    if play:
+        cfg.scene.num_envs = PLAY_NUM_ENVS
+        cfg.episode_length_s = PLAY_EPISODE_LENGTH_S
+        cfg.observations["actor"].enable_corruption = False
+
+    return cfg

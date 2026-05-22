@@ -1,31 +1,36 @@
 API 参考
 ========
 
-主线接口优先查看 ``contactile_mjlab.tasks.tactile_grasp`` 相关模块。
-旧的 ``contactile_mjlab.mjlab.*`` 页面仅用于兼容、调试和回溯，不再是推荐入口。
-
-Task 模块（活跃）
------------------
+包顶层
+------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
-   tasks_env_cfg
-   tasks_tactile_terms
-   tasks_reward_terms
-   tasks_constants
+   package
 
-Legacy 模块
------------
-
-以下模块为重构前的旧接口，保留以兼容调试脚本，但主线任务不再使用。
+环境装配
+--------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
-   tactile_grasp_env
-   mdp
-   action_terms
-   actuators
-   control
+   constants
+   env_cfgs
+   rl_cfg
+   robot_cfg
+   object_cfg
    paths
+
+MDP 子包
+--------
+
+.. toctree::
+   :maxdepth: 1
+
+   mdp_actions
+   mdp_actuators
+   mdp_observations
+   mdp_rewards
+   mdp_events
+   mdp_terminations

@@ -1,7 +1,7 @@
 实现总览
 ========
 
-本文是当前 task-based 实现的总入口，帮助读者快速理解：
+本文是当前 ``tactile_grasp`` 实现的总入口，帮助读者快速理解：
 
 - 主线任务是什么
 - 代码入口在哪里
@@ -9,107 +9,188 @@
 - 哪些能力已经实现，哪些还明确留到后续阶段
 
 如果你想看“当前仓库做到了哪一步”，优先看本文。
-根目录的 ``plan.md`` 只保留路线与原则，不再同步当前实现细节。
 
 主线任务
 --------
 
-仓库当前保留两个任务：
+仓库当前只保留一个任务：
 
-.. list-table::
-   :header-rows: 1
+==================================================== ================================================
+Task ID                                              作用
+==================================================== ================================================
+``Mjlab-TactileGrasp-Robotiq2F85``                   主线任务，使用 per-taxel 三轴力（normal/tangential 拆分 + history）
+==================================================== ================================================
 
-   * - Task ID
-     - 作用
-   * - ``Mjlab-TactileGrasp-Robotiq2F85-PTSSpheres``
-     - 主线任务，使用 per-taxel 三轴力
-   * - ``Mjlab-TactileGrasp-Robotiq2F85-TouchSite``
-     - 回归对照任务，保留旧 3×3 标量 touch map
+旧的 ``-PTSSpheres`` / ``-TouchSite`` 后缀已经退役；TouchSite 路径在源码层
+也已经删除。
 
-两者共享同一套控制接口、奖励结构、终止条件和 PPO 配置，只在触觉观测路径上不同。
-
-这里的“任务”含义需要特别说明：当前主线是 tactile gripper baseline，不是 whole-arm manipulation。
-因此动作接口仍然固定为 Robotiq 2F-85 的一维 ``Δu``，而不是机械臂末端的 ``6DoF`` 位姿控制。
+任务范围说明：当前主线是 *tactile gripper baseline*，不是 whole-arm
+manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是机械臂末端的
+6DoF 位姿控制。
 
 代码入口
 --------
 
 推荐从包根入口开始阅读：
 
-- ``contactile_mjlab.make_env()``：按 task id 创建环境
-- ``contactile_mjlab.load_env_cfg()``：读取已注册 task 的环境配置
-- ``contactile_mjlab.load_rl_cfg()``：读取 PPO 配置
-- ``contactile_mjlab.tasks.tactile_grasp``：任务注册与实现主体
+- ``tactile_grasp.make_env()`` —— 直接拿一个 ``ManagerBasedRlEnv``
+- ``tactile_grasp.load_env_cfg()`` —— 拿到 cfg 后自行 mutate，再交给
+  ``ManagerBasedRlEnv``
+- ``tactile_grasp.load_rl_cfg()`` —— 读取 PPO runner cfg
+- ``tactile_grasp.TASK_ID`` —— 唯一的 task id 常量
 
-实现组织关系：
+包采用扁平 layout（不再有 ``tasks/`` 子层），主要文件：
 
 ::
 
-   contactile_mjlab
-   ├── __init__.py
-   │   └── re-export make_env / load_env_cfg / load_rl_cfg / task ids
-   └── tasks/tactile_grasp/
-       ├── __init__.py        # register_tasks(), make_env(), load_env_cfg()
-       ├── env_cfg.py         # 组装 Scene / Obs / Action / Reward / Done
-       ├── robot_cfg.py       # 选择 XML、配置 actuator、初始关节状态
-       ├── object_cfg.py      # hanging_box 物体配置
-       ├── tactile_terms.py   # touch / taxel force / wrench 观测读取
-       ├── reward_terms.py    # reward 与 termination helper
-       ├── rl_cfg.py          # PPO runner config
-       └── constants.py       # task id、sensor 名称、阈值、关节名
+   tactile_grasp/
+   ├── __init__.py          # 注册 task，re-export make_env / load_env_cfg / TASK_ID
+   ├── constants.py         # TASK_ID、sensor 名称、阈值、关节名
+   ├── env_cfgs.py          # make_tactile_grasp_env_cfg(play) —— Scene / Obs / Action / Reward / Done 装配
+   ├── robot_cfg.py         # Robotiq + PTS spheres EntityCfg + action cfg
+   ├── object_cfg.py        # hanging_box EntityCfg
+   ├── paths.py             # 包内资产路径
+   ├── rl_cfg.py            # PPO runner cfg
+   ├── assets/              # MJCF + props（已迁入包内，pip install 后自带）
+   └── mdp/
+       ├── actions.py       # RobotiqCommandAction(Cfg)
+       ├── actuators.py     # RobotiqGeneralActuator(Cfg) —— XML actuator 包装
+       ├── observations.py  # taxel normal/tangential split、pad wrench、gripper_command
+       ├── rewards.py       # alive / tactile_force_l2 / action_l2 / close_command_l2 / drop_penalty
+       ├── terminations.py  # object_height_below / stable_grasp_hold
+       └── events.py        # re-export mjlab reset_scene_to_default
 
-实现现状矩阵
-------------
+任务注册
+--------
 
-下表是当前仓库进度的单一事实来源。
+注册发生在 ``tactile_grasp/__init__.py`` 导入时：
+
+.. code-block:: python
+
+   from tactile_grasp.constants import TASK_ID
+   from tactile_grasp.env_cfgs import make_tactile_grasp_env_cfg
+   from tactile_grasp.rl_cfg import tactile_grasp_ppo_runner_cfg
+
+   register_mjlab_task(
+       task_id=TASK_ID,
+       env_cfg=make_tactile_grasp_env_cfg(play=False),
+       play_env_cfg=make_tactile_grasp_env_cfg(play=True),
+       rl_cfg=tactile_grasp_ppo_runner_cfg(),
+       runner_cls=None,
+   )
+
+``scripts/train.py`` 与 ``scripts/play.py`` 都只是先 ``import tactile_grasp``
+触发上面这段注册，然后转发到 ``mjlab.scripts.train.main`` /
+``mjlab.scripts.play.main``。
+
+观测维度
+--------
+
+``obs["actor"]`` 在主线任务下是 320 维：
 
 .. list-table::
    :header-rows: 1
+   :widths: 30 20 20 20
 
-   * - 子系统
-     - 当前状态
-     - 备注
-   * - 资产层
-     - 已完成
-     - ``2f85.xml``、``2f85_tactile.xml``、``2f85_pts_spheres.xml`` 与对应 scene 文件都已存在
-   * - 环境层
-     - 已完成
-     - task registry、train/play config、``make_env()`` / ``load_env_cfg()`` / ``load_rl_cfg()`` 已接通
-   * - 触觉层
-     - 已完成但简化
-     - TouchSite 与 PTSSpheres 都能工作；PTSSpheres 当前是 builtin ``<force>`` sensor 直读
-   * - 控制层
-     - 已完成
-     - ``Δu`` 控制、Robotiq tendon/general actuator 封装已接通；未采用理想 force actuator，也未引入 whole-arm ``6DoF`` 动作
-   * - 奖励与终止
-     - 已完成但简化
-     - 最小 reward 集合与 ``stable_grasp`` 判定已实现；无复杂 shaping
-   * - 训练层
-     - 已完成 smoke
-     - PPO 最小训练可跑；正式 benchmark、长期收敛结论尚未整理
-   * - sim2real 过渡层
-     - 未实现
-     - 无 local-frame tactile、无 history、无 randomization、无 slip proxy
-   * - sim2real 部署层
-     - 未开始
-     - 仅保留设计原则，未进入部署与标定实现
+   * - 观测项
+     - 每步形状
+     - history_length
+     - 总贡献维度
+   * - left_taxel_normal
+     - ``[B, 9]``
+     - 5
+     - 45
+   * - left_taxel_tangential
+     - ``[B, 18]``
+     - 5
+     - 90
+   * - right_taxel_normal
+     - ``[B, 9]``
+     - 5
+     - 45
+   * - right_taxel_tangential
+     - ``[B, 18]``
+     - 5
+     - 90
+   * - left_pad_force
+     - ``[B, 3]``
+     - 3
+     - 9
+   * - left_pad_torque
+     - ``[B, 3]``
+     - 3
+     - 9
+   * - right_pad_force
+     - ``[B, 3]``
+     - 3
+     - 9
+   * - right_pad_torque
+     - ``[B, 3]``
+     - 3
+     - 9
+   * - gripper_command
+     - ``[B, 1]``
+     - 1
+     - 1
+   * - joint_pos
+     - ``[B, 6]``
+     - 1
+     - 6
+   * - joint_vel
+     - ``[B, 6]``
+     - 1
+     - 6
+   * - last_action
+     - ``[B, 1]``
+     - 1
+     - 1
+   * - **合计**
+     -
+     -
+     - **320**
 
-当前明确未实现项
-----------------
+每个 taxel 的 3D 力按 ``z`` 法向 / ``xy`` 切向拆成两个独立的 ObservationTerm，
+方便后续做不同的 scale / encoder。
 
-- taxel local-frame force
-- taxel force history
-- slip proxy
-- domain randomization
-- sim2real 部署链路
+奖励 / 终止
+-----------
 
-当前明确不在 Phase 1
---------------------
+奖励项（来自 ``mdp/rewards.py``）：
 
-- pad 多碰撞几何拆分
-- 动作扩展到 ``[Δu, Δforce_limit]``
-- whole-arm ``6DoF`` 动作或笛卡尔 ``IK`` 控制
-- 理想 force actuator 抽象
+==================== ======= =====================================
+奖励项                权重    作用
+==================== ======= =====================================
+``alive``             +1.0   未终止时给 +1
+``tactile_force``     -0.01  双指总 taxel force 平方和
+``action_rate``       -0.001 raw action 平方
+``close_command``     -0.001 归一化命令 ``(u/255)^2``
+``drop_penalty``      -5.0   object_drop 触发时 -5
+==================== ======= =====================================
+
+终止项（来自 ``mdp/terminations.py`` 与 ``mjlab.envs.mdp.time_out``）：
+
+==================== ============ =====================================================
+终止项                类型          条件
+==================== ============ =====================================================
+``time_out``          超时         达到 ``episode_length_s``
+``object_drop``       失败         ``object_height_below(minimum_height=0.08)``
+``stable_grasp``      成功         ``stable_grasp_hold`` 连续 25 步同时满足 height & touch
+==================== ============ =====================================================
+
+``stable_grasp_hold`` 是一个有状态 termination：每个 env 维护一个计数器，
+每步在 ``height_ok & touch_ok`` 时 +1，否则清零，达到 ``hold_steps`` 返回 True。
+
+动作
+----
+
+一维连续动作 ``Δu ∈ [-1, 1]``，由 ``RobotiqCommandAction`` 内部累积：
+
+.. code-block:: text
+
+   u_new = clip(u + action * delta_u_max, 0, 255)
+
+写入 XML 中的 ``split`` tendon target，再走原始 2F-85 general actuator
+（通过 ``RobotiqGeneralActuator`` 包装为 position-like 字段）。
 
 运行时数据流
 ------------
@@ -117,65 +198,59 @@
 ::
 
    policy(obs["actor"])
-      -> action in [-1, 1]
-      -> RobotiqCommandAction.process_actions()
-      -> u = clip(u + action * delta_u_max, 0, 255)
-      -> write tendon target
-      -> MuJoCo step (decimation = 10, dt = 0.002)
-      -> builtin sensors update
-      -> tactile_terms / mjlab.mdp read observations
-      -> reward_terms compute reward and termination helpers
-      -> env returns obs, reward, terminated, truncated
+      -> action ∈ [-1, 1]
+      -> RobotiqCommandAction.process_actions()  # 累积到 u
+      -> RobotiqCommandAction.apply_actions()    # 写 tendon target
+      -> MuJoCo step (decimation=10, dt=0.002)
+      -> builtin force/torque sensors update
+      -> mdp.observations 拼装 320 维 actor obs（带 history buffer）
+      -> mdp.rewards / mdp.terminations 计算 reward 与 termination
+      -> env 返回 obs, reward, terminated, truncated
 
-当前 actor observation 的共同骨架为：
+train / play 差异
+-----------------
 
-- 左右触觉观测
-- 左右 pad 全局 wrench
-- 归一化夹爪命令
-- 夹爪相关关节位置 / 速度
-- 上一步动作
+``make_tactile_grasp_env_cfg(play=True)`` 只改三件事：
 
-其中触觉部分按任务分支：
+- ``cfg.scene.num_envs = 1``
+- ``cfg.episode_length_s = 6.0``
+- ``cfg.observations["actor"].enable_corruption = False``
 
-==================== ==================== ===================
-任务                  每指触觉形状          总 observation 维度
-==================== ==================== ===================
-TouchSite             ``[B, 9]``           44
-PTSSpheres            ``[B, 27]``          80
-==================== ==================== ===================
+其余（actor / critic 观测、reward、terminations、actuator）与 train 完全一致。
+当前不做 domain randomization。
 
 与 mjlab 的关系
 ---------------
 
-- ``pyproject.toml`` 中的 ``mjlab.tasks`` entry point 指向 ``contactile_mjlab``
-- ``register_tasks()`` 为 train / play 两种配置注册两个 task
+- ``pyproject.toml`` 通过 ``mjlab.tasks`` entry point 暴露 ``tactile_grasp``
+- 任务注册借助 ``mjlab.tasks.registry.register_mjlab_task``
+- 训练 / play 直接复用 ``mjlab.scripts.train.main`` /
+  ``mjlab.scripts.play.main``
 - ``ManagerBasedRlEnvCfg`` 是唯一的环境装配中心
-- 训练脚本通过 ``load_rl_cfg()`` 取 PPO 配置，再交给 mjlab 的 RSL-RL runner
 
 当前验证状态
 ------------
 
-当前主线已经完成以下验证类型：
-
 - MJCF 编译检查
-- ``reset()`` / ``step()`` smoke test
-- TouchSite / PTSSpheres 双任务并存验证
-- 最小 PPO smoke run
+- ``reset()`` / ``step()`` smoke test（``scripts/smoke_env.py``）
+- Viewer 可视化（``scripts/view_env.py``）
+- 观测维度回归测试（``tests/test_observation_shapes.py`` ⇒ 320）
+- 最小 PPO smoke run（``WANDB_MODE=offline ... --agent.max-iterations 100``）
 
-这意味着仓库已经进入“可运行、可验证、可继续迭代”的阶段，而不是早期纯方案阶段。
+当前明确未实现 / 后续项
+-----------------------
+
+- slip proxy / 滑移检测
+- 目标接触过滤（区分目标物体 vs 其他几何）
+- 迁移到 mjlab managed contact sensor 接口
+- 长期 PPO 收敛 benchmark
+- domain randomization
+- sim2real 部署链路
 
 文档地图
 --------
 
-- :doc:`tactile_pipeline`：触觉信号怎么从 XML 传感器变成 observation tensor
-- :doc:`reward_design`：reward / termination 的当前逻辑与后续预留项
-- :doc:`control_pipeline`：动作语义、actuator 封装、train/play 与 PPO 配置
-- :doc:`pts_taxel_scheme`：PTS sphere-taxel 的 MJCF 建模与命名约束
-
-相关页面
---------
-
-- :doc:`tactile_pipeline`
-- :doc:`reward_design`
-- :doc:`control_pipeline`
-- :doc:`pts_taxel_scheme`
+- :doc:`tactile_pipeline` —— 触觉信号从 XML 传感器到 obs tensor
+- :doc:`reward_design` —— reward / termination 的当前定义
+- :doc:`control_pipeline` —— 动作语义、actuator 封装、PPO 配置
+- :doc:`pts_taxel_scheme` —— PTS sphere-taxel 的 MJCF 建模

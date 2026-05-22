@@ -4,93 +4,188 @@
 本页面向使用者，回答三件事：
 
 1. 怎么创建并运行主线环境
-2. 怎么在 ``PTSSpheres`` 和 ``TouchSite`` 之间切换
-3. 仓库里有哪些脚本可用于 smoke test、viewer 和训练
+2. 怎么训练 / play 主线 PPO 策略
+3. 仓库里有哪些脚本可用于 smoke test、viewer 和坐标系检查
+
+主线只有一个任务：``Mjlab-TactileGrasp-Robotiq2F85`` —— 单条 PTSSpheres
+路径，per-taxel 三轴力按 normal / tangential 拆分后带 history。
 
 环境创建
 --------
 
-默认主线任务为 ``PTSSpheres``（per-taxel 三轴力触觉）。通过 ``make_env`` 创建环境：
+最简单的方式是通过包顶层 ``make_env``：
 
 .. code-block:: python
 
    import torch
 
-   from contactile_mjlab import DEFAULT_TASK_ID, PTS_SPHERES_TASK_ID, TOUCH_SITE_TASK_ID, make_env
+   from tactile_grasp import make_env
 
-   # 默认 PTSSpheres 任务
-   env = make_env(DEFAULT_TASK_ID, play=True)
-
-   # 回归对照 TouchSite 任务
-   env = make_env(TOUCH_SITE_TASK_ID, play=True)
+   env = make_env(play=True)  # play=True → 1 env, episode_length 6 s
 
    obs, _ = env.reset()
-   action = torch.zeros((env.num_envs, env.action_manager.total_action_dim))
+   action = torch.zeros(
+       (env.num_envs, env.action_manager.total_action_dim),
+       device=env.device,
+   )
    obs, reward, terminated, truncated, _ = env.step(action)
 
-如果你只是想确认环境能起起来，优先用：
+   print(obs["actor"].shape)  # torch.Size([1, 320])
+
+如果只想确认环境能起起来：
 
 .. code-block:: bash
 
-   uv run python main.py
-   uv run python scripts/smoke_env.py --steps 40
+   PYTHONPATH= uv run python scripts/smoke_env.py
+
+直接走 viewer 做可视化检查（默认 ``--device cuda``，CPU 用户加 ``--device cpu``）：
+
+.. code-block:: bash
+
+   PYTHONPATH= uv run python scripts/view_env.py --device cpu
+
+字段覆盖：cfg 后处理 idiom
+--------------------------
+
+``make_env`` 本身不接收字段覆盖；调用方拿到 cfg 后直接改字段，再交给
+``ManagerBasedRlEnv``。这是 mjlab idiom：
+
+.. code-block:: python
+
+   from mjlab.envs import ManagerBasedRlEnv
+
+   from tactile_grasp import TASK_ID, load_env_cfg
+
+   cfg = load_env_cfg(TASK_ID, play=False)
+   cfg.scene.num_envs = 16
+   cfg.episode_length_s = 1.5
+   cfg.auto_reset = True
+
+   env = ManagerBasedRlEnv(cfg, device="cpu")
 
 动作空间
 --------
 
-动作为一维连续标量，范围 ``[-1, 1]``，语义是 Robotiq 2F-85 的位置命令增量。
-当前主线不包含 ``UR`` 机械臂控制、笛卡尔 ``IK`` 或 whole-arm ``6DoF`` 动作。
+动作为一维连续标量，范围 ``[-1, 1]``，语义是 Robotiq 2F-85 的位置命令增量 ``Δu``：
+
+.. code-block:: text
+
+   u = clip(u + action * delta_u_max, 0, 255)
+
+``delta_u_max`` 默认 ``3.0``。当前主线不包含 UR 机械臂控制、笛卡尔 IK
+或 whole-arm 6DoF 动作。
 
 观测结构
 --------
 
-默认主线任务 ``PTS_SPHERES_TASK_ID`` 的观测 ``obs["actor"]`` 由以下部分拼接：
+``obs["actor"]`` 在主线任务下固定为 320 维，由以下项按字典顺序拼接（每项尾部都套了
+mjlab ``history_length`` buffer）：
 
-- 左指 3×3 taxel 三轴力（27 维）
-- 右指 3×3 taxel 三轴力（27 维）
-- 左指全局 force（3 维）+ torque（3 维）
-- 右指全局 force（3 维）+ torque（3 维）
-- 归一化夹爪命令（1 维）
-- 夹爪关节位置 + 速度
-- 上一步动作（1 维）
+.. list-table::
+   :header-rows: 1
+   :widths: 30 20 20 20
 
-对照任务 ``TOUCH_SITE_TASK_ID`` 使用 3×3 标量 touch map（18 维触觉），其余相同。
+   * - 观测项
+     - 每步形状
+     - history_length
+     - 总贡献维度
+   * - left_taxel_normal
+     - ``[B, 9]``
+     - 5
+     - 45
+   * - left_taxel_tangential
+     - ``[B, 18]``
+     - 5
+     - 90
+   * - right_taxel_normal
+     - ``[B, 9]``
+     - 5
+     - 45
+   * - right_taxel_tangential
+     - ``[B, 18]``
+     - 5
+     - 90
+   * - left_pad_force
+     - ``[B, 3]``
+     - 3
+     - 9
+   * - left_pad_torque
+     - ``[B, 3]``
+     - 3
+     - 9
+   * - right_pad_force
+     - ``[B, 3]``
+     - 3
+     - 9
+   * - right_pad_torque
+     - ``[B, 3]``
+     - 3
+     - 9
+   * - gripper_command
+     - ``[B, 1]``
+     - 1
+     - 1
+   * - joint_pos
+     - ``[B, 6]``
+     - 1
+     - 6
+   * - joint_vel
+     - ``[B, 6]``
+     - 1
+     - 6
+   * - last_action
+     - ``[B, 1]``
+     - 1
+     - 1
+   * - **合计**
+     -
+     -
+     - **320**
 
-训练
-----
+Per-taxel 力在 site-local 坐标系中读取（``site.Z`` 为 pad 法向，
+``site.X / site.Y`` 为切向），由 ``quat="1 0 -1 0"`` 在 XML 中固化。
 
-通过 task id 加载 PPO 配置：
+训练 / Play
+-----------
 
-.. code-block:: python
+``scripts/train.py`` 与 ``scripts/play.py`` 只做一件事：``import tactile_grasp``
+触发任务注册，然后转发到 ``mjlab.scripts.train.main`` / ``mjlab.scripts.play.main``。
+所以所有命令行参数都遵循 mjlab CLI。
 
-   from contactile_mjlab import DEFAULT_TASK_ID, load_rl_cfg
-
-   cfg = load_rl_cfg(DEFAULT_TASK_ID)
-
-最小训练 smoke run：
+最小训练 smoke：
 
 .. code-block:: bash
 
-   uv run python scripts/train_ppo.py \
-     --task-id Mjlab-TactileGrasp-Robotiq2F85-PTSSpheres \
-     --device cpu \
-     --num-envs 8 \
-     --episode-length-s 0.5 \
-     --max-iterations 1
+   WANDB_MODE=offline PYTHONPATH= uv run python scripts/train.py \
+       Mjlab-TactileGrasp-Robotiq2F85 \
+       --agent.max-iterations 100 \
+       --gpu-ids None
+
+GPU 训练（默认 0 号卡）：
+
+.. code-block:: bash
+
+   PYTHONPATH= uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85
+
+Play 已保存的策略：
+
+.. code-block:: bash
+
+   PYTHONPATH= uv run python scripts/play.py Mjlab-TactileGrasp-Robotiq2F85
 
 调试脚本
 --------
 
-项目 ``scripts/`` 目录包含以下调试工具：
+``scripts/`` 目录还包含：
 
-- ``smoke_env.py`` — 环境随机动作 smoke test
+- ``smoke_env.py`` — 单步 reset + step smoke 测试
+- ``view_env.py`` — 带 viewer 的随机动作可视化
 - ``test_gripper_ctrl.py`` — 单独测试夹爪控制回路
 - ``visualize_taxels.py`` — 触觉阵列可视化
-- ``inspect_pts_frames.py`` — 用 ``mjviser`` 动态推进并查看 PTSSpheres 的 pad / taxel site/sensor 局部坐标系
+- ``inspect_pts_frames.py`` — 用 ``mjviser`` 动态推进并查看 PTSSpheres 的
+  pad / taxel site / sensor 局部坐标系
 - ``generate_pts_spheres_xml.py`` — 从 ``2f85.xml`` 生成 ``2f85_pts_spheres.xml``
 - ``check_mjcf.py`` — MJCF 模型加载检查
-- ``view_env.py`` — 环境可视化
-- ``train_ppo.py`` — PPO 训练入口
 
 阅读路径
 --------

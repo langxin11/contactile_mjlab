@@ -25,11 +25,11 @@ from scipy.spatial.transform import Rotation
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from contactile_mjlab.paths import PTS_SPHERES_SCENE_XML
-from contactile_mjlab.tasks.tactile_grasp.constants import (
+from tactile_grasp.constants import (
     LEFT_TAXEL_SITE_NAMES,
     RIGHT_TAXEL_SITE_NAMES,
 )
+from tactile_grasp.paths import PTS_SPHERES_SCENE_XML
 
 PAD_FT_SITE_NAMES = ("left_pad_ft_site", "right_pad_ft_site")
 DEFAULT_FRAME_SCALE = 0.0035

@@ -1,34 +1,26 @@
-"""Run the tactile grasp training env with viewer for visual inspection."""
+"""带 viewer 跑 tactile grasp env 做可视化检查."""
 
 from __future__ import annotations
 
 import argparse
 
 import torch
+from mjlab.envs import ManagerBasedRlEnv
 
-from contactile_mjlab import DEFAULT_TASK_ID, make_env
-from contactile_mjlab.tasks.tactile_grasp.constants import TACTILE_OBS_DIM_BY_TASK
+from tactile_grasp import TASK_ID, load_env_cfg
 
 
 def main() -> None:
-    """Run the selected tactile grasp task in the interactive viewer."""
+    """Run the tactile grasp env with a viewer for visual inspection."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--task-id", type=str, default=DEFAULT_TASK_ID)
     parser.add_argument("--device", type=str, default="cuda")
     args = parser.parse_args()
 
-    env = make_env(
-        args.task_id,
-        play=True,
-        num_envs=1,
-        episode_length_s=6.0,
-        auto_reset=True,
-        device=args.device,
-        render_mode="human",
-    )
-    tactile_obs_dim = TACTILE_OBS_DIM_BY_TASK[args.task_id]
+    cfg = load_env_cfg(TASK_ID, play=True)
+    cfg.auto_reset = True
+    env = ManagerBasedRlEnv(cfg, device=args.device, render_mode="human")
 
-    obs, _ = env.reset()
+    env.reset()
     step = 0
     while True:
         action = 0.3 * torch.randn(
@@ -36,20 +28,9 @@ def main() -> None:
         )
         obs, reward, terminated, truncated, _ = env.step(action)
         step += 1
-
-        touch = obs["actor"][:, :tactile_obs_dim].abs().sum().item()
-        cmd = obs["actor"][:, tactile_obs_dim + 12].item()
-
         if step % 50 == 0 or terminated.any() or truncated.any():
-            status = ""
-            if terminated.any():
-                status += " [TERM]"
-            if truncated.any():
-                status += " [TRUNC]"
-            print(
-                f"step={step:4d}  touch_sum={touch:.4f}  cmd={cmd:.3f}"
-                f"  reward={reward[0].item():+.4f}{status}"
-            )
+            status = " [TERM]" if terminated.any() else (" [TRUNC]" if truncated.any() else "")
+            print(f"step={step:4d}  reward={reward[0].item():+.4f}{status}")
 
 
 if __name__ == "__main__":
