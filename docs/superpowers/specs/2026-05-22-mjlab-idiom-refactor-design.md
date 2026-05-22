@@ -392,12 +392,12 @@ if __name__ == "__main__":
 使用方式：
 
 ```bash
-python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 \
+uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 \
     --env.scene.num-envs 128 \
     --env.rewards.tactile-force.weight -0.02 \
     --agent.max-iterations 5000
 
-python scripts/play.py Mjlab-TactileGrasp-Robotiq2F85
+uv run python scripts/play.py Mjlab-TactileGrasp-Robotiq2F85
 ```
 
 ### 6.3 `pyproject.toml`
@@ -538,11 +538,11 @@ XML 内部相对路径（`<mesh file="..."/>`、`<include file="..."/>`）保持
 
 ### 8.2 验证关卡（按顺序）
 
-1. **Import smoke**：`python -c "import tactile_grasp; print(tactile_grasp.TASK_ID)"`
-2. **Env smoke**：`python scripts/smoke_env.py`
-3. **View smoke**：`python scripts/view_env.py`（人眼确认场景渲染）
-4. **Train smoke**：`python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 --agent.max-iterations 10`
-5. **Play smoke**：`python scripts/play.py Mjlab-TactileGrasp-Robotiq2F85`
+1. **Import smoke**：`uv run python -c "import tactile_grasp; print(tactile_grasp.TASK_ID)"`
+2. **Env smoke**：`uv run python scripts/smoke_env.py`
+3. **View smoke**：`uv run python scripts/view_env.py`（人眼确认场景渲染）
+4. **Train smoke**：`uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 --agent.max-iterations 10`
+5. **Play smoke**：`uv run python scripts/play.py Mjlab-TactileGrasp-Robotiq2F85`
 6. **测试套件**：`uv run pytest tests/`
 
 ---
@@ -631,9 +631,9 @@ V1 部署时把真机 PTS 降采样到 50 Hz（每 2 帧取 1 帧），喂给 50
 
 1. `src/contactile_mjlab/` 目录不存在；`src/tactile_grasp/` 按 §3.1 结构存在
 2. `tests/` 下 5 个测试文件全部通过（包括新增 4 个 + 现有 1 个）
-3. `python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 --agent.max-iterations 10` 完整跑通，日志目录形如 `logs/rsl_rl/tactile_grasp/<timestamp>/`
-4. `python scripts/play.py Mjlab-TactileGrasp-Robotiq2F85` 能加载最新 checkpoint 并 rollout
-5. `pip install -e .` 后能在另一个 Python session 里 `import tactile_grasp` 并 `make_env()` 成功（验证 assets package-data 生效）
+3. `uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 --agent.max-iterations 10` 完整跑通，日志目录形如 `logs/rsl_rl/tactile_grasp/<timestamp>/`
+4. `uv run python scripts/play.py Mjlab-TactileGrasp-Robotiq2F85` 能加载最新 checkpoint 并 rollout
+5. `uv pip install -e .` 后能在另一个 Python session 里 `import tactile_grasp` 并 `make_env()` 成功（验证 assets package-data 生效）
 6. 观测维度（含 history）= 320，分项符合 §5.4 表格
 7. `grep -rn "TouchSite\|TOUCH_SITE\|touch_map\|tactile_model" src/ scripts/ tests/ main.py` 无命中（除 `paths.py` 里 `TACTILE_XML` / `TACTILE_SCENE_XML` 路径常量外）
 8. `git log --oneline` 显示 9 个 commit 按 §7.5 顺序
