@@ -29,12 +29,7 @@
 - 主线实现目录：`src/tactile_grasp/`
 - legacy 调试目录：`src/tactile_grasp/_mdp_legacy/`
 
-当前保留两个任务：
-
-- `Mjlab-TactileGrasp-Robotiq2F85-PTSSpheres`
-- `Mjlab-TactileGrasp-Robotiq2F85-TouchSite`
-
-默认主线任务是 `PTSSpheres`。
+当前注册任务：`Mjlab-TactileGrasp-Robotiq2F85`（PTS spheres 触觉传感器单一实现，TouchSite 路径已删除）。
 
 ## 动作与观测边界
 
@@ -50,7 +45,7 @@
 
 - policy observation 不应依赖 MuJoCo 内部接触真值
 - MuJoCo 内部真值可以用于 reward、termination 和 debug
-- 当前 `PTSSpheres` 触觉是 builtin `<force>` sensor 的 world-frame 三轴力直读
+- 当前触觉是 builtin `<force>` sensor 的 world-frame 三轴力直读
 - 当前未实现 local-frame tactile、history、slip proxy
 
 ## 代码组织约束
@@ -82,8 +77,8 @@
 - 包加载检查：`uv run python main.py`
 - MJCF 编译检查：`uv run python scripts/check_mjcf.py`
 - 环境 smoke test：`uv run python scripts/smoke_env.py --steps 40`
-- Viewer：`uv run python scripts/view_env.py --task-id Mjlab-TactileGrasp-Robotiq2F85-PTSSpheres --device cpu`
-- 最小训练：`uv run python scripts/train_ppo.py --task-id Mjlab-TactileGrasp-Robotiq2F85-PTSSpheres --device cpu --num-envs 8 --episode-length-s 0.5 --max-iterations 1`
+- Viewer：`uv run python scripts/view_env.py --task-id Mjlab-TactileGrasp-Robotiq2F85 --device cpu`
+- 最小训练：`uv run python scripts/train_ppo.py --task-id Mjlab-TactileGrasp-Robotiq2F85 --device cpu --num-envs 8 --episode-length-s 0.5 --max-iterations 1`
 
 ## 必做验证
 
@@ -101,7 +96,7 @@
 
 ### 改了训练相关代码
 
-- `uv run python scripts/train_ppo.py --task-id Mjlab-TactileGrasp-Robotiq2F85-PTSSpheres --device cpu --num-envs 8 --episode-length-s 0.5 --max-iterations 1`
+- `uv run python scripts/train_ppo.py --task-id Mjlab-TactileGrasp-Robotiq2F85 --device cpu --num-envs 8 --episode-length-s 0.5 --max-iterations 1`
 
 ### 改了 Python 代码
 
