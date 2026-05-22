@@ -76,6 +76,9 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+contactile_mjlab = ["assets/**/*.xml", "assets/**/*.stl"]
+
 [project.entry-points."mjlab.tasks"]
 contactile_mjlab = "contactile_mjlab"
 
