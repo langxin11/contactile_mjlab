@@ -5,8 +5,8 @@ from __future__ import annotations
 import mujoco
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 
-from ._mdp_legacy.actions import RobotiqCommandActionCfg
-from ._mdp_legacy.actuators import RobotiqGeneralActuatorCfg
+from .mdp.actions import RobotiqCommandActionCfg
+from .mdp.actuators import RobotiqGeneralActuatorCfg
 from .paths import PTS_SPHERES_XML
 
 

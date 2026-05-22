@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs.mdp import joint_pos_rel, joint_vel_rel, last_action, time_out
-from mjlab.envs.mdp.events import reset_scene_to_default
 from mjlab.managers import (
     EventTermCfg,
     ObservationGroupCfg,
@@ -18,7 +17,6 @@ from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.viewer import ViewerConfig
 
-from . import reward_terms, tactile_terms
 from .constants import (
     LEFT_TAXEL_FORCE_SENSOR_NAMES,
     OBJECT_CFG,
@@ -26,6 +24,9 @@ from .constants import (
     ROBOT_JOINT_CFG,
     TACTILE_ACTIVITY_THRESHOLD,
 )
+from .mdp import events, terminations
+from .mdp import observations as tactile_terms  # alias kept for Task 6 transition
+from .mdp import rewards as reward_terms  # alias kept for Task 6 transition
 from .object_cfg import build_object_cfg
 from .robot_cfg import build_action_cfg, build_robot_cfg
 
@@ -125,7 +126,7 @@ class TactileGraspTaskConfig:
             actions={"gripper_command": build_action_cfg(self.delta_u_max)},
             events={
                 "reset_scene_to_default": EventTermCfg(
-                    func=reset_scene_to_default,
+                    func=events.reset_scene_to_default,
                     mode="reset",
                 )
             },
@@ -148,21 +149,21 @@ class TactileGraspTaskConfig:
                     weight=-0.001,
                 ),
                 "drop_penalty": RewardTermCfg(
-                    func=lambda env: env.termination_manager.get_term("object_drop").float(),
+                    func=reward_terms.drop_penalty,
                     weight=-5.0,
                 ),
             },
             terminations={
                 "time_out": TerminationTermCfg(func=time_out, time_out=True),
                 "object_drop": TerminationTermCfg(
-                    func=reward_terms.object_height_below,
+                    func=terminations.object_height_below,
                     params={
                         "minimum_height": self.drop_height_threshold,
                         "asset_cfg": OBJECT_CFG,
                     },
                 ),
                 "stable_grasp": TerminationTermCfg(
-                    func=reward_terms.stable_grasp_hold,
+                    func=terminations.stable_grasp_hold,
                     params={
                         "hold_steps": self.success_hold_steps,
                         "minimum_height": self.success_height_threshold,
