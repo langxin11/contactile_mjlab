@@ -11,7 +11,9 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from tactile_grasp import TASK_ID, make_env
+from mjlab.envs import ManagerBasedRlEnv
+
+from tactile_grasp import TASK_ID, load_env_cfg
 
 
 def main() -> None:
@@ -20,11 +22,10 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=120)
     args = parser.parse_args()
 
-    env = make_env(
-        TASK_ID,
-        episode_length_s=args.steps * 0.02,
-        auto_reset=False,
-    )
+    cfg = load_env_cfg(TASK_ID)
+    cfg.episode_length_s = args.steps * 0.02
+    cfg.auto_reset = False
+    env = ManagerBasedRlEnv(cfg, device="cpu")
     observations, _ = env.reset()
     actor_obs = observations["actor"]
     print(f"task_id={TASK_ID}")

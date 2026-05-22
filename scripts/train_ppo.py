@@ -33,14 +33,10 @@ def main() -> None:
 
     from mjlab.envs import ManagerBasedRlEnv
 
-    env = ManagerBasedRlEnv(
-        load_env_cfg(
-            args.task_id,
-            num_envs=args.num_envs,
-            episode_length_s=args.episode_length_s,
-        ),
-        device=args.device,
-    )
+    cfg = load_env_cfg(args.task_id)
+    cfg.scene.num_envs = args.num_envs
+    cfg.episode_length_s = args.episode_length_s
+    env = ManagerBasedRlEnv(cfg, device=args.device)
     vec_env = RslRlVecEnvWrapper(env)
     runner_cfg = load_rl_cfg(args.task_id)
     if args.max_iterations is not None:

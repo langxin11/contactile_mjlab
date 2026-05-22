@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 
 import torch
+from mjlab.envs import ManagerBasedRlEnv
 
-from tactile_grasp import TASK_ID, make_env
+from tactile_grasp import TASK_ID, load_env_cfg
 
 
 def main() -> None:
@@ -15,15 +16,11 @@ def main() -> None:
     parser.add_argument("--device", type=str, default="cuda")
     args = parser.parse_args()
 
-    env = make_env(
-        TASK_ID,
-        play=True,
-        num_envs=1,
-        episode_length_s=6.0,
-        auto_reset=True,
-        device=args.device,
-        render_mode="human",
-    )
+    cfg = load_env_cfg(TASK_ID, play=True)
+    cfg.scene.num_envs = 1
+    cfg.episode_length_s = 6.0
+    cfg.auto_reset = True
+    env = ManagerBasedRlEnv(cfg, device=args.device, render_mode="human")
 
     env.reset()
     step = 0

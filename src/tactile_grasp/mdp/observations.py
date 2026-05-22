@@ -27,27 +27,6 @@ def sensor_values(
     return torch.cat(values, dim=-1)
 
 
-def taxel_force_map(
-    env: "ManagerBasedRlEnv",
-    sensor_names: tuple[str, ...],
-    entity_name: str = "robot",
-) -> torch.Tensor:
-    """Return the flattened per-taxel 3-axis force map."""
-    return sensor_values(env, sensor_names=sensor_names, entity_name=entity_name)
-
-
-def pad_wrench(
-    env: "ManagerBasedRlEnv",
-    force_sensor: str,
-    torque_sensor: str,
-    entity_name: str = "robot",
-) -> torch.Tensor:
-    """Concatenate fingertip force and torque observations."""
-    force = _sensor_tensor(env, f"{entity_name}/{force_sensor}")
-    torque = _sensor_tensor(env, f"{entity_name}/{torque_sensor}")
-    return torch.cat([force, torque], dim=-1)
-
-
 def gripper_command(
     env: "ManagerBasedRlEnv",
     action_name: str = "gripper_command",

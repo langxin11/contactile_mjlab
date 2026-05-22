@@ -12,12 +12,17 @@ def test_mdp_submodules_exist():
 
 
 def test_observations_exports():
-    """Observations module must expose the three taxel-feature callables."""
+    """Observations module must expose the canonical taxel/pad/gripper callables."""
     from tactile_grasp.mdp import observations
 
-    assert callable(getattr(observations, "taxel_force_map"))
-    assert callable(getattr(observations, "pad_wrench"))
-    assert callable(getattr(observations, "gripper_command"))
+    for name in (
+        "taxel_normal_force",
+        "taxel_tangential_force",
+        "pad_force",
+        "pad_torque",
+        "gripper_command",
+    ):
+        assert callable(getattr(observations, name)), name
 
 
 def test_rewards_exports():
