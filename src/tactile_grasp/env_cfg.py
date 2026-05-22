@@ -43,6 +43,10 @@ class TactileGraspTaskConfig:
     delta_u_max: float = 3.0
     force_scale: float = 20.0
     torque_scale: float = 2.0
+    normal_force_scale: float = 5.0  # 5 N → 1.0
+    tangential_force_scale: float = 2.0  # 切向幅值典型小于法向
+    tactile_history_length: int = 5  # 100 ms @ 50 Hz
+    wrench_history_length: int = 3  # 60 ms
     drop_height_threshold: float = 0.08
     success_height_threshold: float = 0.14
     success_hold_steps: int = 25
@@ -54,46 +58,58 @@ class TactileGraspTaskConfig:
         """Build the underlying manager-based environment config."""
         left_sensor_names = LEFT_TAXEL_FORCE_SENSOR_NAMES
         right_sensor_names = RIGHT_TAXEL_FORCE_SENSOR_NAMES
-        tactile_func = tactile_terms.taxel_force_map
-        tactile_scale = 1.0 / self.force_scale
         tactile_threshold = TACTILE_ACTIVITY_THRESHOLD
         if self.success_tactile_threshold is not None:
             tactile_threshold = self.success_tactile_threshold
 
         actor_terms = {
-            "left_tactile": ObservationTermCfg(
-                func=tactile_func,
+            "left_taxel_normal": ObservationTermCfg(
+                func=tactile_terms.taxel_normal_force,
                 params={"sensor_names": left_sensor_names},
-                scale=tactile_scale,
+                scale=1.0 / self.normal_force_scale,
+                history_length=self.tactile_history_length,
             ),
-            "right_tactile": ObservationTermCfg(
-                func=tactile_func,
+            "left_taxel_tangential": ObservationTermCfg(
+                func=tactile_terms.taxel_tangential_force,
+                params={"sensor_names": left_sensor_names},
+                scale=1.0 / self.tangential_force_scale,
+                history_length=self.tactile_history_length,
+            ),
+            "right_taxel_normal": ObservationTermCfg(
+                func=tactile_terms.taxel_normal_force,
                 params={"sensor_names": right_sensor_names},
-                scale=tactile_scale,
+                scale=1.0 / self.normal_force_scale,
+                history_length=self.tactile_history_length,
             ),
-            "left_wrench": ObservationTermCfg(
-                func=tactile_terms.pad_wrench,
-                params={"force_sensor": "left_pad_force", "torque_sensor": "left_pad_torque"},
-                scale=(
-                    1.0 / self.force_scale,
-                    1.0 / self.force_scale,
-                    1.0 / self.force_scale,
-                    1.0 / self.torque_scale,
-                    1.0 / self.torque_scale,
-                    1.0 / self.torque_scale,
-                ),
+            "right_taxel_tangential": ObservationTermCfg(
+                func=tactile_terms.taxel_tangential_force,
+                params={"sensor_names": right_sensor_names},
+                scale=1.0 / self.tangential_force_scale,
+                history_length=self.tactile_history_length,
             ),
-            "right_wrench": ObservationTermCfg(
-                func=tactile_terms.pad_wrench,
-                params={"force_sensor": "right_pad_force", "torque_sensor": "right_pad_torque"},
-                scale=(
-                    1.0 / self.force_scale,
-                    1.0 / self.force_scale,
-                    1.0 / self.force_scale,
-                    1.0 / self.torque_scale,
-                    1.0 / self.torque_scale,
-                    1.0 / self.torque_scale,
-                ),
+            "left_pad_force": ObservationTermCfg(
+                func=tactile_terms.pad_force,
+                params={"sensor_name": "left_pad_force"},
+                scale=1.0 / self.force_scale,
+                history_length=self.wrench_history_length,
+            ),
+            "left_pad_torque": ObservationTermCfg(
+                func=tactile_terms.pad_torque,
+                params={"sensor_name": "left_pad_torque"},
+                scale=1.0 / self.torque_scale,
+                history_length=self.wrench_history_length,
+            ),
+            "right_pad_force": ObservationTermCfg(
+                func=tactile_terms.pad_force,
+                params={"sensor_name": "right_pad_force"},
+                scale=1.0 / self.force_scale,
+                history_length=self.wrench_history_length,
+            ),
+            "right_pad_torque": ObservationTermCfg(
+                func=tactile_terms.pad_torque,
+                params={"sensor_name": "right_pad_torque"},
+                scale=1.0 / self.torque_scale,
+                history_length=self.wrench_history_length,
             ),
             "gripper_command": ObservationTermCfg(func=tactile_terms.gripper_command),
             "joint_pos": ObservationTermCfg(

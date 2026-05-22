@@ -56,3 +56,55 @@ def gripper_command(
     action_term = env.action_manager.get_term(action_name)
     assert isinstance(action_term, RobotiqCommandAction)
     return action_term.command / 255.0
+
+
+def _stack_taxel_force(
+    env: "ManagerBasedRlEnv",
+    sensor_names: tuple[str, ...],
+    entity_name: str,
+) -> torch.Tensor:
+    """Stack each taxel's 3D force into shape (N, n_taxels, 3) — internal helper."""
+    per_taxel = [_sensor_tensor(env, f"{entity_name}/{name}") for name in sensor_names]
+    return torch.stack(per_taxel, dim=1)
+
+
+def taxel_normal_force(
+    env: "ManagerBasedRlEnv",
+    sensor_names: tuple[str, ...],
+    entity_name: str = "robot",
+) -> torch.Tensor:
+    """Per-taxel normal force (z component), shape (N, n_taxels).
+
+    PTS sphere taxel site-local frame: z = normal (out of finger), xy = tangential.
+    """
+    stacked = _stack_taxel_force(env, sensor_names, entity_name)
+    return stacked[..., 2]
+
+
+def taxel_tangential_force(
+    env: "ManagerBasedRlEnv",
+    sensor_names: tuple[str, ...],
+    entity_name: str = "robot",
+) -> torch.Tensor:
+    """Per-taxel tangential force (xy), flattened to (N, 2 * n_taxels)."""
+    stacked = _stack_taxel_force(env, sensor_names, entity_name)
+    tangential = stacked[..., :2]
+    return tangential.reshape(tangential.shape[0], -1)
+
+
+def pad_force(
+    env: "ManagerBasedRlEnv",
+    sensor_name: str,
+    entity_name: str = "robot",
+) -> torch.Tensor:
+    """Pad-aggregated 3D force."""
+    return _sensor_tensor(env, f"{entity_name}/{sensor_name}")
+
+
+def pad_torque(
+    env: "ManagerBasedRlEnv",
+    sensor_name: str,
+    entity_name: str = "robot",
+) -> torch.Tensor:
+    """Pad-aggregated 3D torque."""
+    return _sensor_tensor(env, f"{entity_name}/{sensor_name}")
