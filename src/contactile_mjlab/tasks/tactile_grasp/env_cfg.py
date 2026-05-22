@@ -21,16 +21,10 @@ from mjlab.viewer import ViewerConfig
 from . import reward_terms, tactile_terms
 from .constants import (
     LEFT_TAXEL_FORCE_SENSOR_NAMES,
-    LEFT_TOUCH_SENSOR_NAMES,
     OBJECT_CFG,
-    PTS_SPHERES_TASK_ID,
     RIGHT_TAXEL_FORCE_SENSOR_NAMES,
-    RIGHT_TOUCH_SENSOR_NAMES,
     ROBOT_JOINT_CFG,
-    TACTILE_ACTIVITY_THRESHOLD_BY_TASK,
-    TACTILE_MODEL_PTS_SPHERES,
-    TACTILE_MODEL_TOUCH_SITE,
-    TOUCH_SITE_TASK_ID,
+    TACTILE_ACTIVITY_THRESHOLD,
 )
 from .object_cfg import build_object_cfg
 from .robot_cfg import build_action_cfg, build_robot_cfg
@@ -40,14 +34,12 @@ from .robot_cfg import build_action_cfg, build_robot_cfg
 class TactileGraspTaskConfig:
     """Thin wrapper over the mjlab config knobs used by this project."""
 
-    tactile_model: str = TACTILE_MODEL_PTS_SPHERES
     num_envs: int = 1
     env_spacing: float = 0.5
     decimation: int = 10
     timestep: float = 0.002
     episode_length_s: float = 3.0
     delta_u_max: float = 3.0
-    touch_scale: float = 10.0
     force_scale: float = 20.0
     torque_scale: float = 2.0
     drop_height_threshold: float = 0.08
@@ -59,21 +51,11 @@ class TactileGraspTaskConfig:
 
     def build(self) -> ManagerBasedRlEnvCfg:
         """Build the underlying manager-based environment config."""
-        if self.tactile_model == TACTILE_MODEL_TOUCH_SITE:
-            left_sensor_names = LEFT_TOUCH_SENSOR_NAMES
-            right_sensor_names = RIGHT_TOUCH_SENSOR_NAMES
-            tactile_func = tactile_terms.touch_map
-            tactile_scale = 1.0 / self.touch_scale
-            tactile_threshold = TACTILE_ACTIVITY_THRESHOLD_BY_TASK[TOUCH_SITE_TASK_ID]
-        elif self.tactile_model == TACTILE_MODEL_PTS_SPHERES:
-            left_sensor_names = LEFT_TAXEL_FORCE_SENSOR_NAMES
-            right_sensor_names = RIGHT_TAXEL_FORCE_SENSOR_NAMES
-            tactile_func = tactile_terms.taxel_force_map
-            tactile_scale = 1.0 / self.force_scale
-            tactile_threshold = TACTILE_ACTIVITY_THRESHOLD_BY_TASK[PTS_SPHERES_TASK_ID]
-        else:
-            raise ValueError(f"Unsupported tactile model: {self.tactile_model}")
-
+        left_sensor_names = LEFT_TAXEL_FORCE_SENSOR_NAMES
+        right_sensor_names = RIGHT_TAXEL_FORCE_SENSOR_NAMES
+        tactile_func = tactile_terms.taxel_force_map
+        tactile_scale = 1.0 / self.force_scale
+        tactile_threshold = TACTILE_ACTIVITY_THRESHOLD
         if self.success_tactile_threshold is not None:
             tactile_threshold = self.success_tactile_threshold
 
@@ -127,7 +109,7 @@ class TactileGraspTaskConfig:
         return ManagerBasedRlEnvCfg(
             scene=SceneCfg(
                 entities={
-                    "robot": build_robot_cfg(self.tactile_model),
+                    "robot": build_robot_cfg(),
                     "object": build_object_cfg(),
                 },
                 num_envs=self.num_envs,

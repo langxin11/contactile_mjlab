@@ -27,15 +27,6 @@ def sensor_values(
     return torch.cat(values, dim=-1)
 
 
-def touch_map(
-    env: "ManagerBasedRlEnv",
-    sensor_names: tuple[str, ...],
-    entity_name: str = "robot",
-) -> torch.Tensor:
-    """Return the flattened scalar touch map."""
-    return sensor_values(env, sensor_names=sensor_names, entity_name=entity_name)
-
-
 def taxel_force_map(
     env: "ManagerBasedRlEnv",
     sensor_names: tuple[str, ...],

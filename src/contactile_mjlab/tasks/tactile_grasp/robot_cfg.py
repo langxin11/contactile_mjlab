@@ -1,4 +1,4 @@
-"""Robot configuration for tactile grasp task variants."""
+"""Robotiq + PTS spheres 模型构造."""
 
 from __future__ import annotations
 
@@ -7,23 +7,18 @@ from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 
 from ...mjlab.action_terms import RobotiqCommandActionCfg
 from ...mjlab.actuators import RobotiqGeneralActuatorCfg
-from ...paths import PTS_SPHERES_XML, TACTILE_XML
-from .constants import TACTILE_MODEL_PTS_SPHERES, TACTILE_MODEL_TOUCH_SITE
+from ...paths import PTS_SPHERES_XML
 
 
-def robot_spec(tactile_model: str) -> mujoco.MjSpec:
-    """Load the tactile robot spec for the selected model."""
-    xml_path = {
-        TACTILE_MODEL_TOUCH_SITE: TACTILE_XML,
-        TACTILE_MODEL_PTS_SPHERES: PTS_SPHERES_XML,
-    }[tactile_model]
-    return mujoco.MjSpec.from_file(str(xml_path))
+def robot_spec() -> mujoco.MjSpec:
+    """加载 PTS spheres 触觉模型 spec."""
+    return mujoco.MjSpec.from_file(str(PTS_SPHERES_XML))
 
 
-def build_robot_cfg(tactile_model: str) -> EntityCfg:
-    """Build the Robotiq entity config."""
+def build_robot_cfg() -> EntityCfg:
+    """构建 Robotiq entity config."""
     return EntityCfg(
-        spec_fn=lambda: robot_spec(tactile_model),
+        spec_fn=robot_spec,
         articulation=EntityArticulationInfoCfg(
             actuators=(
                 RobotiqGeneralActuatorCfg(
@@ -48,7 +43,7 @@ def build_robot_cfg(tactile_model: str) -> EntityCfg:
 
 
 def build_action_cfg(delta_u_max: float) -> RobotiqCommandActionCfg:
-    """Build the shared Robotiq delta-command action config."""
+    """Robotiq Δu 动作 config."""
     return RobotiqCommandActionCfg(
         entity_name="robot",
         actuator_name="fingers_actuator",
