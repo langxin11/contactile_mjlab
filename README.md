@@ -7,14 +7,16 @@
 ## 快速开始
 
 ```bash
-# GPU 后端（默认，CUDA 12.8 wheel）
 uv sync --extra cu128 --group dev
 
-# 或 CPU-only 后端（CI / 笔记本省电场景）
-uv sync --extra cpu --group dev
+# 极简 smoke
+uv run python scripts/smoke_env.py
 
-# 验证
-uv run python main.py
+# 训练
+uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 --agent.max-iterations 100
+
+# 回放
+uv run python scripts/play.py Mjlab-TactileGrasp-Robotiq2F85
 ```
 
 ## 目录
@@ -39,4 +41,4 @@ cd docs && uv run sphinx-build -b html source _build
 - **V1** — 3×3 法向触觉阵列（当前阶段）
 - **V2** — 触觉阵列 + wrench + slip proxy
 
-详见 `plan.md`。
+详见 `docs/superpowers/specs/2026-05-22-mjlab-idiom-refactor-design.md`。
