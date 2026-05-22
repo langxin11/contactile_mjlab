@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_PACKAGE_DIR = Path(__file__).resolve().parent
+ASSETS_DIR = Path(__file__).parent / "assets"
+ROBOTIQ_DIR = ASSETS_DIR / "robotiq_2f85"
+PROPS_DIR = ASSETS_DIR / "props"
 
-ASSETS_DIR = _PACKAGE_DIR / "assets" / "robotiq_2f85"
-BASE_XML = ASSETS_DIR / "2f85.xml"
-TACTILE_XML = ASSETS_DIR / "2f85_tactile.xml"
-TACTILE_SCENE_XML = ASSETS_DIR / "scene_tactile.xml"
-PTS_SPHERES_XML = ASSETS_DIR / "2f85_pts_spheres.xml"
-PTS_SPHERES_SCENE_XML = ASSETS_DIR / "scene_pts_spheres.xml"
-PROPS_DIR = _PACKAGE_DIR / "assets" / "props"
+PTS_SPHERES_XML = ROBOTIQ_DIR / "2f85_pts_spheres.xml"
+PTS_SPHERES_SCENE_XML = ROBOTIQ_DIR / "scene_pts_spheres.xml"
+HANGING_BOX_XML = PROPS_DIR / "hanging_box.xml"
+
+BASE_XML = ROBOTIQ_DIR / "2f85.xml"
+TACTILE_XML = ROBOTIQ_DIR / "2f85_tactile.xml"
+TACTILE_SCENE_XML = ROBOTIQ_DIR / "scene_tactile.xml"

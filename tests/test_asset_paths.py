@@ -1,9 +1,10 @@
-"""Verify packaged asset paths exist and resolve inside the installed package."""
+"""Verify packaged asset paths exist, ship inside the package, and load in MuJoCo."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import mujoco
 import pytest
 
 import contactile_mjlab
@@ -11,23 +12,22 @@ from contactile_mjlab import paths
 
 
 @pytest.mark.parametrize(
-    "attr",
+    "xml_path",
     [
-        "ASSETS_DIR",
-        "BASE_XML",
-        "TACTILE_XML",
-        "TACTILE_SCENE_XML",
-        "PTS_SPHERES_XML",
-        "PTS_SPHERES_SCENE_XML",
+        paths.BASE_XML,
+        paths.TACTILE_XML,
+        paths.TACTILE_SCENE_XML,
+        paths.PTS_SPHERES_XML,
+        paths.PTS_SPHERES_SCENE_XML,
+        paths.HANGING_BOX_XML,
     ],
 )
-def test_asset_path_exists_inside_package(attr: str) -> None:
-    """Each exported asset path must exist AND live inside the installed package dir."""
-    p: Path = getattr(paths, attr)
-    assert p.exists(), f"{attr} -> {p} does not exist"
+def test_xml_loadable(xml_path: Path) -> None:
+    """Each shipped XML must exist, live inside the package, and parse via MuJoCo."""
+    assert xml_path.is_file(), f"missing: {xml_path}"
     package_dir = Path(contactile_mjlab.__file__).resolve().parent
-    resolved = p.resolve()
+    resolved = xml_path.resolve()
     assert package_dir in resolved.parents, (
-        f"{attr} -> {resolved} is not under packaged dir {package_dir}; "
-        "assets must ship with the wheel."
+        f"{xml_path} is not under packaged dir {package_dir}; assets must ship with the wheel."
     )
+    mujoco.MjSpec.from_file(str(xml_path))
