@@ -133,7 +133,7 @@ contactile_mjlab = [
 - [ ] **Step 1.6: 同步依赖**
 
 ```bash
-uv sync --extra cpu --group dev
+uv sync --extra cu128 --group dev
 ```
 
 Expected: 无报错；`contactile_mjlab` 重新装为可编辑包，资产 package-data 被打包。
@@ -966,7 +966,7 @@ include = ["tactile_grasp*"]         # 新增
 - [ ] **Step 4.11: 重装并同步**
 
 ```bash
-uv sync --extra cpu --group dev
+uv sync --extra cu128 --group dev
 ```
 
 Expected: 成功；`tactile_grasp` 被装为可编辑包。
@@ -2296,7 +2296,7 @@ Expected: 全绿。
 打开 `README.md`，把"快速开始"段中的 `uv run python main.py` 增补 train/play 命令：
 
 ```bash
-uv sync --extra cpu --group dev
+uv sync --extra cu128 --group dev
 
 # 极简 smoke
 uv run python scripts/smoke_env.py

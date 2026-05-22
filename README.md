@@ -7,7 +7,10 @@
 ## 快速开始
 
 ```bash
-# CPU 后端
+# GPU 后端（默认，CUDA 12.8 wheel）
+uv sync --extra cu128 --group dev
+
+# 或 CPU-only 后端（CI / 笔记本省电场景）
 uv sync --extra cpu --group dev
 
 # 验证
