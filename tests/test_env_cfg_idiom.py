@@ -27,11 +27,11 @@ def test_make_env_cfg_play():
 
 def test_no_dataclass_builder():
     """TactileGraspTaskConfig dataclass-builder must be gone."""
-    try:
-        from tactile_grasp.env_cfgs import TactileGraspTaskConfig  # noqa: F401
-    except ImportError:
-        return
-    raise AssertionError("TactileGraspTaskConfig 仍存在 — idiom 切换未完成")
+    import tactile_grasp.env_cfgs as env_cfgs
+
+    assert not hasattr(env_cfgs, "TactileGraspTaskConfig"), (
+        "TactileGraspTaskConfig 仍存在 — idiom 切换未完成"
+    )
 
 
 def test_load_env_cfg_no_override_whitelist():

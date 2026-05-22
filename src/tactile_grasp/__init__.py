@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
-
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.tasks.registry import (
     list_tasks,
@@ -28,8 +26,8 @@ if TASK_ID not in list_tasks():
 
 
 def load_env_cfg(task_id: str = TASK_ID, *, play: bool = False):
-    """Return a fresh deep-copied env cfg; caller mutates fields directly."""
-    return deepcopy(_load_env_cfg(task_id, play=play))
+    """Return the registered env cfg (already deep-copied by mjlab registry)."""
+    return _load_env_cfg(task_id, play=play)
 
 
 def make_env(

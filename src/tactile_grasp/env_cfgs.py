@@ -116,7 +116,7 @@ def _actor_observation_terms() -> dict[str, ObservationTermCfg]:
 
 
 def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
-    """Construct the tactile_grasp env cfg; play=True mutates the shared base."""
+    """Build the tactile_grasp env cfg; if play=True, apply play overrides to the fresh cfg."""
     actor_terms = _actor_observation_terms()
 
     cfg = ManagerBasedRlEnvCfg(

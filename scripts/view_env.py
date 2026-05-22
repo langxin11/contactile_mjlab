@@ -17,8 +17,6 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = load_env_cfg(TASK_ID, play=True)
-    cfg.scene.num_envs = 1
-    cfg.episode_length_s = 6.0
     cfg.auto_reset = True
     env = ManagerBasedRlEnv(cfg, device=args.device, render_mode="human")
 
