@@ -420,3 +420,58 @@ def test_hold_bonus_requires_lift_and_bilateral_contact() -> None:
         observations.taxel_contact_count = original_count
 
     assert torch.equal(out, torch.tensor([1.0, 0.0, 0.0], dtype=torch.float32))
+
+
+def test_robot_floor_collision_detects_robot_geom_pair_only() -> None:
+    """robot_floor_collision should only count robot geom contacts against the floor."""
+    env = _FakeEnv(num_envs=3)
+    env._tactile_robot_geom_ids = torch.tensor([7, 8], dtype=torch.long)
+    env._tactile_floor_geom_id = 99
+    env.sim = SimpleNamespace(
+        data=SimpleNamespace(
+            nacon=torch.tensor([5], dtype=torch.int32),
+            contact=SimpleNamespace(
+                geom=torch.tensor(
+                    [
+                        [50, 99],
+                        [7, 99],
+                        [99, 8],
+                        [7, 123],
+                        [50, 51],
+                    ],
+                    dtype=torch.int32,
+                ),
+                worldid=torch.tensor([0, 1, 2, 0, 1], dtype=torch.int32),
+            ),
+        )
+    )
+
+    out = rewards.robot_floor_collision(env)
+
+    assert torch.equal(out, torch.tensor([0.0, 1.0, 1.0], dtype=torch.float32))
+
+
+def test_robot_floor_collision_initializes_cached_geom_ids_from_scene_when_missing() -> None:
+    """robot_floor_collision should lazily cache robot and floor geom ids from the scene."""
+    env = _FakeEnv(num_envs=1)
+    env.scene["robot"] = SimpleNamespace(
+        indexing=SimpleNamespace(geom_ids=torch.tensor([7, 8], dtype=torch.long))
+    )
+    env.scene["terrain"] = SimpleNamespace(
+        indexing=SimpleNamespace(geom_ids=torch.tensor([99], dtype=torch.long))
+    )
+    env.sim = SimpleNamespace(
+        data=SimpleNamespace(
+            nacon=torch.tensor([1], dtype=torch.int32),
+            contact=SimpleNamespace(
+                geom=torch.tensor([[8, 99]], dtype=torch.int32),
+                worldid=torch.tensor([0], dtype=torch.int32),
+            ),
+        )
+    )
+
+    out = rewards.robot_floor_collision(env)
+
+    assert torch.equal(out, torch.tensor([1.0], dtype=torch.float32))
+    assert torch.equal(env._tactile_robot_geom_ids, torch.tensor([7, 8], dtype=torch.long))
+    assert int(env._tactile_floor_geom_id) == 99

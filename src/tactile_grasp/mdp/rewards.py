@@ -158,6 +158,43 @@ def close_command_l2(
     return torch.sum(torch.square(command), dim=1)
 
 
+def _ensure_collision_cache(env: "ManagerBasedRlEnv") -> None:
+    """Populate cached robot and floor geom ids needed by contact-scan rewards."""
+    robot_geom_ids = getattr(env, "_tactile_robot_geom_ids", None)
+    if robot_geom_ids is None:
+        env._tactile_robot_geom_ids = env.scene["robot"].indexing.geom_ids.to(torch.long)
+
+    floor_geom_id = getattr(env, "_tactile_floor_geom_id", None)
+    if floor_geom_id is None:
+        terrain = env.scene.get("terrain")
+        if terrain is None:
+            raise RuntimeError("robot_floor_collision() requires terrain geom ids in env.scene.")
+        env._tactile_floor_geom_id = int(terrain.indexing.geom_ids[0])
+
+
+def robot_floor_collision(env: "ManagerBasedRlEnv") -> torch.Tensor:
+    """Return 1 for envs where any robot geom contacts the floor geom."""
+    _ensure_collision_cache(env)
+
+    out = torch.zeros(env.num_envs, device=env.device, dtype=torch.float32)
+    ncon = int(env.sim.data.nacon[0])
+    if ncon <= 0:
+        return out
+
+    contact_geom = env.sim.data.contact.geom[:ncon]
+    contact_world = env.sim.data.contact.worldid[:ncon].to(torch.long)
+    robot_geom_ids = env._tactile_robot_geom_ids.to(contact_geom.device)
+    floor_geom_id = int(env._tactile_floor_geom_id)
+    geom0 = contact_geom[:, 0]
+    geom1 = contact_geom[:, 1]
+    hit = (torch.isin(geom0, robot_geom_ids) & (geom1 == floor_geom_id)) | (
+        torch.isin(geom1, robot_geom_ids) & (geom0 == floor_geom_id)
+    )
+    if torch.any(hit):
+        out[contact_world[hit].to(out.device)] = 1.0
+    return out
+
+
 def drop_penalty(env: "ManagerBasedRlEnv") -> torch.Tensor:
     """物体掉落 termination 命中时的负奖励通道."""
     return env.termination_manager.get_term("object_drop").float()
