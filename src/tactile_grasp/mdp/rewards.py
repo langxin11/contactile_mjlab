@@ -46,9 +46,109 @@ def action_l2(env: "ManagerBasedRlEnv") -> torch.Tensor:
     return torch.sum(torch.square(env.action_manager.action), dim=1)
 
 
+def reach3d(env: "ManagerBasedRlEnv", k_pos: float) -> torch.Tensor:
+    """Reward tool-object proximity in 3D."""
+    delta = obs.active_object_position(env) - obs.tool_position(env)
+    return torch.exp(-k_pos * torch.linalg.norm(delta, dim=1))
+
+
+def align_xy(env: "ManagerBasedRlEnv", k_xy: float) -> torch.Tensor:
+    """Reward planar alignment between tool and active object."""
+    delta_xy = obs.active_object_position(env)[:, :2] - obs.tool_position(env)[:, :2]
+    return torch.exp(-k_xy * torch.linalg.norm(delta_xy, dim=1))
+
+
+def tactile_contact_binary(
+    env: "ManagerBasedRlEnv",
+    left_sensor_names: tuple[str, ...],
+    right_sensor_names: tuple[str, ...],
+    threshold: float = 0.05,
+    entity_name: str = "robot",
+) -> torch.Tensor:
+    """Return 1 when either fingertip has any active taxel."""
+    left = obs.taxel_contact_count(
+        env,
+        left_sensor_names,
+        entity_name=entity_name,
+        threshold=threshold,
+    )
+    right = obs.taxel_contact_count(
+        env,
+        right_sensor_names,
+        entity_name=entity_name,
+        threshold=threshold,
+    )
+    return ((left + right) > 0).to(torch.float32)
+
+
+def taxel_coverage(
+    env: "ManagerBasedRlEnv",
+    left_sensor_names: tuple[str, ...],
+    right_sensor_names: tuple[str, ...],
+    threshold: float = 0.05,
+    entity_name: str = "robot",
+) -> torch.Tensor:
+    """Reward balanced multi-taxel contact on both fingers."""
+    left = obs.taxel_contact_count(
+        env,
+        left_sensor_names,
+        entity_name=entity_name,
+        threshold=threshold,
+    ).to(torch.float32)
+    right = obs.taxel_contact_count(
+        env,
+        right_sensor_names,
+        entity_name=entity_name,
+        threshold=threshold,
+    ).to(torch.float32)
+    return 0.5 * torch.clamp(left, max=9.0) / 9.0 + 0.5 * torch.clamp(right, max=9.0) / 9.0
+
+
+def lift_delta(env: "ManagerBasedRlEnv") -> torch.Tensor:
+    """Reward positive object lift relative to cached reset height."""
+    init_z = getattr(env, "_tactile_active_object_init_z", None)
+    if init_z is None:
+        init_z = torch.zeros(env.num_envs, device=env.device, dtype=torch.float32)
+    current_z = obs.active_object_position(env)[:, 2]
+    return torch.relu(current_z - init_z)
+
+
+def hold_bonus(
+    env: "ManagerBasedRlEnv",
+    left_sensor_names: tuple[str, ...],
+    right_sensor_names: tuple[str, ...],
+    threshold: float = 0.05,
+    lift_threshold: float = 0.0,
+    entity_name: str = "robot",
+) -> torch.Tensor:
+    """Return 1 when the object is lifted and both fingers maintain contact."""
+    left = obs.taxel_contact_count(
+        env,
+        left_sensor_names,
+        entity_name=entity_name,
+        threshold=threshold,
+    )
+    right = obs.taxel_contact_count(
+        env,
+        right_sensor_names,
+        entity_name=entity_name,
+        threshold=threshold,
+    )
+    stable = (lift_delta(env) > lift_threshold) & (left > 0) & (right > 0)
+    return stable.to(torch.float32)
+
+
+def action_smoothness_l1(env: "ManagerBasedRlEnv") -> torch.Tensor:
+    """Penalize per-step action changes with a zero previous-action fallback."""
+    prev_action = getattr(env.action_manager, "prev_action", None)
+    if prev_action is None:
+        prev_action = torch.zeros_like(env.action_manager.action)
+    return torch.sum(torch.abs(env.action_manager.action - prev_action), dim=1)
+
+
 def close_command_l2(
     env: "ManagerBasedRlEnv",
-    action_name: str = "gripper_command",
+    action_name: str = "cartesian_gripper",
 ) -> torch.Tensor:
     """惩罚多余的夹爪闭合命令."""
     command = obs.gripper_command(env, action_name=action_name)

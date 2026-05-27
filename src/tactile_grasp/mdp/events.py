@@ -66,6 +66,9 @@ def reset_pick_lift_scene(
 
     half_heights = torch.tensor(OBJECT_HALF_HEIGHTS, device=env.device, dtype=torch.float32)
     env._tactile_active_object_local_pos[env_ids, 2] = half_heights[active_ids]
+    env._tactile_active_object_init_z[env_ids] = (
+        half_heights[active_ids] + env.scene.env_origins[env_ids, 2]
+    )
 
     for object_id, object_name in enumerate(OBJECT_ENTITY_NAMES):
         entity = env.scene[object_name]
@@ -144,6 +147,9 @@ def _ensure_buffers(env: "ManagerBasedRlEnv") -> None:
             (env.num_envs, 3), device=env.device, dtype=torch.float32
         )
         env._tactile_robot_init_yaw = torch.zeros(
+            env.num_envs, device=env.device, dtype=torch.float32
+        )
+        env._tactile_active_object_init_z = torch.zeros(
             env.num_envs, device=env.device, dtype=torch.float32
         )
 

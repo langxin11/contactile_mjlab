@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from tactile_grasp.mdp import observations
+from tactile_grasp.mdp import observations, rewards
 
 
 class _FakeActionManager:
@@ -45,6 +45,9 @@ class _FakeEnv:
             action=torch.zeros((num_envs, 5), dtype=torch.float32),
             prev_action=torch.zeros((num_envs, 5), dtype=torch.float32),
             command=torch.zeros((num_envs, 1), dtype=torch.float32),
+        )
+        self.termination_manager = SimpleNamespace(
+            get_term=lambda name: torch.zeros(num_envs, dtype=torch.bool)
         )
 
 
@@ -214,3 +217,186 @@ def test_taxel_contact_count_sums_active_taxels_per_env() -> None:
 
     assert out.dtype == torch.int64
     assert torch.equal(out, torch.tensor([1, 2], dtype=torch.int64))
+
+
+def test_lift_delta_is_zero_at_table_height_and_positive_when_raised() -> None:
+    """lift_delta should measure positive height gain relative to cached reset height."""
+    env = _FakeEnv(num_envs=2)
+    env._tactile_active_object_ids = torch.zeros(2, dtype=torch.long)
+    env._tactile_active_object_init_z = torch.tensor([0.012, 0.012], dtype=torch.float32)
+    env.scene["cube_24mm"] = SimpleNamespace(
+        data=SimpleNamespace(
+            root_link_pos_w=torch.tensor(
+                [[0.0, 0.0, 0.012], [0.0, 0.0, 0.03]],
+                dtype=torch.float32,
+            )
+        )
+    )
+
+    out = rewards.lift_delta(env)
+
+    assert torch.allclose(out, torch.tensor([0.0, 0.018], dtype=torch.float32))
+
+
+def test_action_smoothness_l1_uses_current_minus_previous_action() -> None:
+    """Smoothness should sum per-dimension absolute action deltas."""
+    env = _FakeEnv(num_envs=2)
+    env.action_manager.action = torch.tensor(
+        [[0.0, 0.5, -0.5, 0.25, -0.25], [1.0, -1.0, 0.0, 0.25, 0.5]],
+        dtype=torch.float32,
+    )
+    env.action_manager.prev_action = torch.tensor(
+        [[0.0, 0.25, -0.25, 0.0, -0.5], [0.5, -0.5, 0.0, 0.0, 0.0]],
+        dtype=torch.float32,
+    )
+
+    out = rewards.action_smoothness_l1(env)
+
+    assert torch.allclose(out, torch.tensor([1.0, 1.75], dtype=torch.float32))
+
+
+def test_close_command_penalty_grows_with_command() -> None:
+    """close_command_l2 should increase with larger normalized close command."""
+    env = _FakeEnv(num_envs=2)
+    env.action_manager = SimpleNamespace(
+        get_term=lambda name: SimpleNamespace(
+            command=torch.tensor([[0.0], [255.0]], dtype=torch.float32)
+        )
+    )
+
+    out = rewards.close_command_l2(env)
+
+    assert torch.allclose(out, torch.tensor([0.0, 1.0], dtype=torch.float32))
+
+
+def test_reach3d_uses_tool_to_object_distance() -> None:
+    """reach3d should decay with tool-object distance and equal 1 at zero distance."""
+    env = _FakeEnv(num_envs=1)
+    original_obj = observations.active_object_position
+    original_tool = observations.tool_position
+    try:
+        observations.active_object_position = lambda _env: torch.tensor(
+            [[0.0, 0.0, 0.02]], dtype=torch.float32
+        )
+        observations.tool_position = lambda _env: torch.tensor(
+            [[0.0, 0.0, 0.02]], dtype=torch.float32
+        )
+        near = rewards.reach3d(env, k_pos=10.0)
+        observations.tool_position = lambda _env: torch.tensor(
+            [[0.1, 0.0, 0.02]], dtype=torch.float32
+        )
+        far = rewards.reach3d(env, k_pos=10.0)
+    finally:
+        observations.active_object_position = original_obj
+        observations.tool_position = original_tool
+
+    assert near.item() > far.item()
+    assert torch.allclose(near, torch.tensor([1.0], dtype=torch.float32))
+
+
+def test_align_xy_ignores_z_offset() -> None:
+    """align_xy should only care about planar mismatch."""
+    env = _FakeEnv(num_envs=1)
+    original_obj = observations.active_object_position
+    original_tool = observations.tool_position
+    try:
+        observations.active_object_position = lambda _env: torch.tensor(
+            [[0.01, -0.01, 0.01]], dtype=torch.float32
+        )
+        observations.tool_position = lambda _env: torch.tensor(
+            [[0.01, -0.01, 0.20]], dtype=torch.float32
+        )
+        perfect_xy = rewards.align_xy(env, k_xy=20.0)
+        observations.tool_position = lambda _env: torch.tensor(
+            [[0.04, -0.01, 0.20]], dtype=torch.float32
+        )
+        shifted_xy = rewards.align_xy(env, k_xy=20.0)
+    finally:
+        observations.active_object_position = original_obj
+        observations.tool_position = original_tool
+
+    assert torch.allclose(perfect_xy, torch.tensor([1.0], dtype=torch.float32))
+    assert perfect_xy.item() > shifted_xy.item()
+
+
+def test_tactile_contact_binary_returns_one_when_any_taxel_is_active() -> None:
+    """Binary contact should activate when either finger has any active taxel."""
+    env = _FakeEnv(num_envs=2)
+    env.scene.update(
+        {
+            "robot/left_taxel_force_00": _FakeSensor(
+                torch.tensor([[0.03, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=torch.float32)
+            ),
+            "robot/right_taxel_force_00": _FakeSensor(
+                torch.tensor([[0.0, 0.0, 0.0], [0.06, 0.0, 0.0]], dtype=torch.float32)
+            ),
+        }
+    )
+
+    out = rewards.tactile_contact_binary(
+        env,
+        left_sensor_names=("left_taxel_force_00",),
+        right_sensor_names=("right_taxel_force_00",),
+        threshold=0.05,
+    )
+
+    assert torch.equal(out, torch.tensor([0.0, 1.0], dtype=torch.float32))
+
+
+def test_taxel_coverage_rewards_balanced_multi_taxel_contact() -> None:
+    """Coverage should average capped left/right active-taxel fractions."""
+    env = _FakeEnv(num_envs=2)
+    left_counts = torch.tensor([9, 3], dtype=torch.int64)
+    right_counts = torch.tensor([4, 12], dtype=torch.int64)
+    original_count = observations.taxel_contact_count
+    try:
+        observations.taxel_contact_count = (
+            lambda _env, sensor_names, threshold=0.05, entity_name="robot": left_counts
+            if sensor_names[0].startswith("left_")
+            else right_counts
+        )
+
+        out = rewards.taxel_coverage(
+            env,
+            left_sensor_names=("left_taxel_force_00",),
+            right_sensor_names=("right_taxel_force_00",),
+            threshold=0.05,
+        )
+    finally:
+        observations.taxel_contact_count = original_count
+
+    assert torch.allclose(
+        out,
+        torch.tensor([13.0 / 18.0, 2.0 / 3.0], dtype=torch.float32),
+    )
+
+
+def test_hold_bonus_requires_lift_and_bilateral_contact() -> None:
+    """hold_bonus should require lift above threshold plus contact on both fingers."""
+    env = _FakeEnv(num_envs=3)
+    original_lift = rewards.lift_delta
+    original_count = observations.taxel_contact_count
+    try:
+        rewards.lift_delta = lambda _env: torch.tensor([0.05, 0.05, 0.01], dtype=torch.float32)
+        counts = {
+            "left": torch.tensor([1, 0, 1], dtype=torch.int64),
+            "right": torch.tensor([1, 1, 1], dtype=torch.int64),
+        }
+        observations.taxel_contact_count = (
+            lambda _env, sensor_names, threshold=0.05, entity_name="robot": counts["left"]
+            if sensor_names[0].startswith("left_")
+            else counts["right"]
+        )
+
+        out = rewards.hold_bonus(
+            env,
+            left_sensor_names=("left_taxel_force_00",),
+            right_sensor_names=("right_taxel_force_00",),
+            threshold=0.05,
+            lift_threshold=0.03,
+        )
+    finally:
+        rewards.lift_delta = original_lift
+        observations.taxel_contact_count = original_count
+
+    assert torch.equal(out, torch.tensor([1.0, 0.0, 0.0], dtype=torch.float32))
