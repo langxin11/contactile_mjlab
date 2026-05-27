@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 import torch
 
 from tactile_grasp.mdp import observations
@@ -45,6 +46,48 @@ class _FakeEnv:
             prev_action=torch.zeros((num_envs, 5), dtype=torch.float32),
             command=torch.zeros((num_envs, 1), dtype=torch.float32),
         )
+
+
+@pytest.mark.parametrize(
+    "helper",
+    (
+        observations.active_object_position,
+        observations.active_object_yaw,
+        observations.vision_proxy,
+    ),
+)
+def test_active_object_observation_helpers_require_initialized_ids(helper) -> None:
+    """Object observation helpers should fail clearly before reset initializes ids."""
+    env = _FakeEnv(num_envs=1)
+    env.scene["robot"] = SimpleNamespace(
+        data=SimpleNamespace(root_link_pos_w=torch.zeros((1, 3), dtype=torch.float32))
+    )
+
+    with pytest.raises(RuntimeError, match="_tactile_active_object_ids"):
+        helper(env)
+
+
+def test_gripper_command_uses_command_attribute_without_concrete_action_type() -> None:
+    """gripper_command should only require a command tensor on the action term."""
+    env = _FakeEnv(num_envs=2)
+    env.action_manager = SimpleNamespace(
+        get_term=lambda name: SimpleNamespace(
+            command=torch.tensor([[0.0], [255.0]], dtype=torch.float32)
+        )
+    )
+
+    out = observations.gripper_command(env)
+
+    assert torch.allclose(out, torch.tensor([[0.0], [1.0]], dtype=torch.float32))
+
+
+def test_gripper_command_raises_when_action_term_has_no_command() -> None:
+    """gripper_command should raise clearly when the action term lacks command."""
+    env = _FakeEnv(num_envs=1)
+    env.action_manager = SimpleNamespace(get_term=lambda name: SimpleNamespace())
+
+    with pytest.raises(TypeError, match="command"):
+        observations.gripper_command(env)
 
 
 def test_taxel_force_observations_clip_to_sensor_limits() -> None:

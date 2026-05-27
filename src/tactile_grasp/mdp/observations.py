@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from ..constants import OBJECT_ENTITY_NAMES
-from .actions import CartesianMocapAction, RobotiqCommandAction
+from .actions import CartesianMocapAction
 
 if TYPE_CHECKING:
     from mjlab.envs import ManagerBasedRlEnv
@@ -38,15 +38,28 @@ def gripper_command(
 ) -> torch.Tensor:
     """Expose the normalized Robotiq command buffer."""
     action_term = env.action_manager.get_term(action_name)
-    assert isinstance(action_term, RobotiqCommandAction | CartesianMocapAction)
-    return action_term.command / 255.0
+    command = getattr(action_term, "command", None)
+    if command is None:
+        raise TypeError(
+            f"Action term '{action_name}' must expose a 'command' tensor for gripper_command()."
+        )
+    return command / 255.0
+
+
+def _require_active_object_ids(env: "ManagerBasedRlEnv") -> torch.Tensor:
+    """Return initialized active object ids or raise a clear error."""
+    active_ids = getattr(env, "_tactile_active_object_ids", None)
+    if active_ids is None:
+        raise RuntimeError(
+            "Observation helper requires '_tactile_active_object_ids' to be initialized. "
+            "Call env.reset() before requesting active-object observations."
+        )
+    return active_ids
 
 
 def active_object_position(env: "ManagerBasedRlEnv") -> torch.Tensor:
     """Return active object root position for each env."""
-    active_ids = getattr(env, "_tactile_active_object_ids", None)
-    if active_ids is None:
-        active_ids = torch.zeros(env.num_envs, device=env.device, dtype=torch.long)
+    active_ids = _require_active_object_ids(env)
     out = torch.zeros((env.num_envs, 3), device=env.device, dtype=torch.float32)
     for object_id, object_name in enumerate(OBJECT_ENTITY_NAMES):
         mask = active_ids == object_id
@@ -57,9 +70,7 @@ def active_object_position(env: "ManagerBasedRlEnv") -> torch.Tensor:
 
 def active_object_yaw(env: "ManagerBasedRlEnv") -> torch.Tensor:
     """Return active object yaw for each env."""
-    active_ids = getattr(env, "_tactile_active_object_ids", None)
-    if active_ids is None:
-        active_ids = torch.zeros(env.num_envs, device=env.device, dtype=torch.long)
+    active_ids = _require_active_object_ids(env)
     out = torch.zeros(env.num_envs, device=env.device, dtype=torch.float32)
     for object_id, object_name in enumerate(OBJECT_ENTITY_NAMES):
         mask = active_ids == object_id
@@ -84,15 +95,13 @@ def robot_yaw(env: "ManagerBasedRlEnv") -> torch.Tensor:
 
 def vision_proxy(env: "ManagerBasedRlEnv") -> torch.Tensor:
     """Low-dimensional visual proxy: relative object pose and object-type one-hot."""
+    active_ids = _require_active_object_ids(env)
     obj_pos = active_object_position(env)
     rel_pos = obj_pos - robot_position(env)
     dyaw = active_object_yaw(env) - robot_yaw(env)
     one_hot = torch.zeros(
         (env.num_envs, len(OBJECT_ENTITY_NAMES)), device=env.device, dtype=torch.float32
     )
-    active_ids = getattr(env, "_tactile_active_object_ids", None)
-    if active_ids is None:
-        active_ids = torch.zeros(env.num_envs, device=env.device, dtype=torch.long)
     one_hot[torch.arange(env.num_envs, device=env.device), active_ids] = 1.0
     return torch.cat(
         [
