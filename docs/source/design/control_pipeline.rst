@@ -168,6 +168,12 @@ CLI 入口
    # Play
    PYTHONPATH= uv run python scripts/play.py Mjlab-TactileGrasp-Robotiq2F85
 
+top-down pick-lift 的 PTS spheres 和桌面物体会产生比 hanging baseline 更多的
+接触约束。环境默认设置 ``SimulationCfg(nconmax=128, njmax=256)``，避免
+MJWarp 在 512 env 训练时使用过小的 heuristic 并打印 ``nefc overflow``。
+如果后续增大 taxel 数或物体复杂度，应优先调大 ``--env.sim.njmax``，必要时同步
+调大 ``--env.sim.nconmax``。
+
 相关页面
 --------
 

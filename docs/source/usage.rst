@@ -178,6 +178,16 @@ GPU 训练（默认 0 号卡）：
 
    PYTHONPATH= uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85
 
+top-down pick-lift 默认把 MJWarp 每个 world 的接触/约束容量设为
+``nconmax=128``、``njmax=256``，用于覆盖 PTS spheres + tabletop object 训练中
+较密的触觉接触。如果日志仍出现 ``nefc overflow``，可以先临时提高：
+
+.. code-block:: bash
+
+   PYTHONPATH= uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 \
+       --env.sim.njmax 384 \
+       --env.sim.nconmax 192
+
 Play 已保存的策略：
 
 .. code-block:: bash

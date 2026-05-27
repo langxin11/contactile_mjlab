@@ -48,6 +48,8 @@ WRENCH_HISTORY_LENGTH = 3
 NUM_ENVS = 64
 PLAY_NUM_ENVS = 1
 ENV_SPACING = 0.5
+SIM_NCONMAX = 128
+SIM_NJMAX = 256
 
 DROP_HEIGHT = 0.002
 SUCCESS_HEIGHT = 0.08
@@ -216,7 +218,11 @@ def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
                 },
             ),
         },
-        sim=SimulationCfg(mujoco=MujocoCfg(timestep=TIMESTEP, cone="elliptic", impratio=10.0)),
+        sim=SimulationCfg(
+            nconmax=SIM_NCONMAX,
+            njmax=SIM_NJMAX,
+            mujoco=MujocoCfg(timestep=TIMESTEP, cone="elliptic", impratio=10.0),
+        ),
         viewer=ViewerConfig(),
         curriculum={
             "pick_lift_stage": CurriculumTermCfg(

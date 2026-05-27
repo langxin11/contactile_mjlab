@@ -24,6 +24,14 @@ def test_pick_lift_action_dim_is_cartesian_plus_gripper() -> None:
     assert "cartesian_gripper" in env.action_manager.active_terms
 
 
+def test_pick_lift_uses_explicit_mjwarp_constraint_capacity() -> None:
+    """Tactile contacts need higher MJWarp constraint capacity than its heuristic."""
+    cfg = load_env_cfg(play=False)
+
+    assert cfg.sim.nconmax == 128
+    assert cfg.sim.njmax == 256
+
+
 def test_cartesian_action_clips_to_workspace_bounds() -> None:
     """Mocap command integration must stay inside configured workspace bounds."""
     env = _make_env(num_envs=2)
