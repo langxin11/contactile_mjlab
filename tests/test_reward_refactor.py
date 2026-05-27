@@ -453,7 +453,13 @@ def test_robot_floor_collision_detects_robot_geom_pair_only() -> None:
 
 def test_robot_floor_collision_initializes_cached_geom_ids_from_scene_when_missing() -> None:
     """robot_floor_collision should lazily cache robot and floor geom ids from the scene."""
+
+    class _BracketOnlyScene(_FakeScene):
+        def get(self, key, default=None):  # type: ignore[override]
+            raise AssertionError(f"scene.get({key!r}) should not be used for terrain lookup")
+
     env = _FakeEnv(num_envs=1)
+    env.scene = _BracketOnlyScene(env_origins=torch.zeros((1, 3), dtype=torch.float32))
     env.scene["robot"] = SimpleNamespace(
         indexing=SimpleNamespace(geom_ids=torch.tensor([7, 8], dtype=torch.long))
     )

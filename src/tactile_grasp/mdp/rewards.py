@@ -166,10 +166,7 @@ def _ensure_collision_cache(env: "ManagerBasedRlEnv") -> None:
 
     floor_geom_id = getattr(env, "_tactile_floor_geom_id", None)
     if floor_geom_id is None:
-        terrain = env.scene.get("terrain")
-        if terrain is None:
-            raise RuntimeError("robot_floor_collision() requires terrain geom ids in env.scene.")
-        env._tactile_floor_geom_id = int(terrain.indexing.geom_ids[0])
+        env._tactile_floor_geom_id = int(env.scene["terrain"].indexing.geom_ids[0])
 
 
 def robot_floor_collision(env: "ManagerBasedRlEnv") -> torch.Tensor:
