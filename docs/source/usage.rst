@@ -7,8 +7,8 @@
 2. 怎么训练 / play 主线 PPO 策略
 3. 仓库里有哪些脚本可用于 smoke test、viewer 和坐标系检查
 
-主线只有一个任务：``Mjlab-TactileGrasp-Robotiq2F85`` —— 单条 PTSSpheres
-路径，per-taxel 三轴力按 normal / tangential 拆分后带 history。
+主线只有一个任务：``Mjlab-TactileGrasp-Robotiq2F85`` —— top-down pick-lift，
+使用 PTSSpheres 触觉、5D mocap+gripper 动作和低维 ``vision_proxy``。
 
 环境创建
 --------
@@ -30,7 +30,7 @@
    )
    obs, reward, terminated, truncated, _ = env.step(action)
 
-   print(obs["actor"].shape)  # torch.Size([1, 320])
+   print(obs["actor"].shape)  # torch.Size([1, 332])
 
 如果只想确认环境能起起来：
 
@@ -66,19 +66,22 @@
 动作空间
 --------
 
-动作为一维连续标量，范围 ``[-1, 1]``，语义是 Robotiq 2F-85 的位置命令增量 ``Δu``：
+动作为五维连续向量，范围 ``[-1, 1]^5``，语义是
+``[dx, dy, dz, dyaw, du]``：
 
 .. code-block:: text
 
-   u = clip(u + action * delta_u_max, 0, 255)
+   p = clip(p + [dx, dy, dz] * 0.01, workspace)
+   yaw = clip(yaw + dyaw * 0.05, [-pi, pi])
+   u = clip(u + du * delta_u_max, 0, 255)
 
-``delta_u_max`` 默认 ``3.0``。当前主线不包含 UR 机械臂控制、笛卡尔 IK
-或 whole-arm 6DoF 动作。
+``u`` 仍是 Robotiq 2F-85 的位置命令寄存器，``p/yaw`` 写 fixed-base 夹爪的
+mocap pose。当前主线不包含 UR / Franka 机械臂关节控制或笛卡尔 IK。
 
 观测结构
 --------
 
-``obs["actor"]`` 在主线任务下固定为 320 维，由以下项按字典顺序拼接（每项尾部都套了
+``obs["actor"]`` 在主线任务下固定为 332 维，由以下项按字典顺序拼接（每项尾部都套了
 mjlab ``history_length`` buffer）：
 
 .. list-table::
@@ -133,17 +136,25 @@ mjlab ``history_length`` buffer）：
      - ``[B, 6]``
      - 1
      - 6
+   * - vision_proxy
+     - ``[B, 8]``
+     - 1
+     - 8
    * - last_action
-     - ``[B, 1]``
+     - ``[B, 5]``
      - 1
-     - 1
+     - 5
    * - **合计**
      -
      -
-     - **320**
+     - **332**
 
 Per-taxel 力在 site-local 坐标系中读取（``site.Z`` 为 pad 法向，
 ``site.X / site.Y`` 为切向），由 ``quat="1 0 -1 0"`` 在 XML 中固化。
+
+``vision_proxy`` 包含 active object 相对夹爪的 ``dx/dy/dz``、相对 yaw 的
+``sin/cos`` 和物体类型 one-hot。scene 中有 ``overhead_debug`` camera 供调试，
+但图像不进入 policy。
 
 训练 / Play
 -----------

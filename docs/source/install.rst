@@ -28,7 +28,7 @@
 
    env = tactile_grasp.make_env(play=True)
    obs, _ = env.reset()
-   print(obs["actor"].shape)  # torch.Size([1, 320])
+   print(obs["actor"].shape)  # torch.Size([1, 332])
 
 Smoke test
 ----------

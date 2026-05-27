@@ -27,6 +27,7 @@ site-local 坐标系下的三维力（``site.Z`` 为 pad 法向，``site.X`` / `
          pad_force()              # [B, 3]
          pad_torque()             # [B, 3]
          gripper_command()        # [B, 1]
+         vision_proxy()           # [B, 8]
       -> ObservationTermCfg(history_length=...)
       -> obs["actor"]
 
@@ -69,11 +70,11 @@ flatten 进 obs。当前配置：
    * - pad force / torque
      - 3
      - 3 × 3 = 9
-   * - 其他 (gripper_command, joint_pos, joint_vel, last_action)
+   * - 其他 (gripper_command, joint_pos, joint_vel, vision_proxy, last_action)
      - 1
      - 原样
 
-主线 actor observation 总维度为 **320**，详细拆分见
+主线 actor observation 总维度为 **332**，详细拆分见
 :doc:`task_architecture`。
 
 为什么当前采用 builtin sensor

@@ -1,51 +1,56 @@
 控制与训练管线
 ==============
 
-本文只讨论动作语义、Robotiq actuator 封装、train/play 配置和 PPO 超参数。
+本文只讨论动作语义、Robotiq actuator 封装、mocap 末端控制、train/play 配置和
+PPO 超参数。
 
 动作语义
 --------
 
-策略输出一维连续动作 ``action ∈ [-1, 1]``，语义不是绝对开度，而是位置命令增量：
+策略输出五维连续动作 ``[dx, dy, dz, dyaw, du] ∈ [-1, 1]^5``：
 
 .. code-block:: text
 
-   u = clip(u + action * delta_u_max, 0, 255)
+   p = clip(p + [dx, dy, dz] * pos_step, workspace)
+   yaw = clip(yaw + dyaw * yaw_step, [-pi, pi])
+   u = clip(u + du * delta_u_max, 0, 255)
 
 其中：
 
+- ``pos_step = 0.01 m``
+- ``yaw_step = 0.05 rad``
 - ``delta_u_max = 3.0``（``env_cfgs.DELTA_U_MAX``）
 - ``u ∈ [0, 255]``
-- ``u`` 由 ``RobotiqCommandAction`` 在环境内部维护
+- ``p/yaw/u`` 由 ``CartesianMocapAction`` 在环境内部维护
 
-接口目的：让策略学“再闭合一点 / 再松开一点”，而不是直接回归 Robotiq 寄存器
-绝对位置。
+接口目的：让策略学 top-down reach / descend / grasp / lift，同时保留 Robotiq
+真实位置命令寄存器语义。
 
 当前动作边界
 ------------
 
-当前主线只控制 Robotiq 2F-85 的开合，不控制整条机械臂。
+当前主线控制 fixed-base 夹爪的 mocap 末端位姿，不控制真实机械臂关节。
 
-- 当前已实现：一维 ``Δu`` 动作
-- 当前未实现：UR 机械臂控制、笛卡尔 IK、whole-arm 6DoF 动作
+- 当前已实现：世界系 ``dx/dy/dz/dyaw`` + Robotiq ``du``
+- 当前未实现：UR / Franka 机械臂控制、笛卡尔 IK、whole-arm 6DoF 动作
 
-如果后续要引入整臂位姿控制，应作为新的任务层定义，而不是改写当前 tactile
-gripper baseline 的动作语义。
+不在 XML 里给夹爪加虚拟 slide/hinge base joints；mjlab 会把 fixed-base
+entity 自动包装成 mocap body，动作项直接写 mocap pose。
 
 控制写入链路
 ------------
 
 当前动作项与 actuator 的关系是：
 
-1. ``RobotiqCommandAction.process_actions()`` 对 policy action 做 clip 与累积
-2. ``RobotiqCommandAction.apply_actions()`` 通过
-   ``entity.set_tendon_len_target`` 将命令写入 ``split`` tendon
-3. ``RobotiqGeneralActuator`` 将 XML 中的 ``<general>`` actuator 包装成
+1. ``CartesianMocapAction.process_actions()`` 对 5D policy action 做 clip 与累积
+2. ``CartesianMocapAction.apply_actions()`` 写 robot mocap pose，并通过
+   ``entity.set_tendon_len_target`` 将 ``u`` 写入 ``split`` tendon
+3. ``RobotiqGeneralActuator`` 继续将 XML 中的 ``<general>`` actuator 包装成
    position-like 命令字段
 
 实现位置：
 
-- ``tactile_grasp.mdp.actions`` —— ``RobotiqCommandAction`` 与 cfg
+- ``tactile_grasp.mdp.actions`` —— ``CartesianMocapAction`` 与 cfg
 - ``tactile_grasp.mdp.actuators`` —— ``RobotiqGeneralActuator`` 与 cfg
 - 在 ``robot_cfg.build_robot_cfg()`` / ``build_action_cfg()`` 中装配
 
@@ -67,9 +72,20 @@ play          1         6.0 s             viewer / 调试 / 单环境检查
 两者的共同事实：
 
 - ``auto_reset = True``
-- 当前没有实现 domain randomization
+- train 按 curriculum stage 逐步开放 object type / pose 随机
+- play 固定使用 Stage 2 随机范围
 - 主要差异只有 ``scene.num_envs``、``episode_length_s`` 以及
   ``observations["actor"].enable_corruption`` 在 play 下显式设为 ``False``
+
+Curriculum stage：
+
+==================== ==================================================
+阶段                 随机范围
+==================== ==================================================
+Stage 0              只用 cube，物体固定中心，夹爪初始对准
+Stage 1              cube/box，物体 ``xy ±0.03 m``，yaw ``±pi/6``
+Stage 2              cube/box/cylinder，物体 ``xy ±0.08 m``，yaw ``±pi``
+==================== ==================================================
 
 字段覆盖 idiom
 --------------
@@ -114,17 +130,18 @@ Save interval         ``50`` iterations
 为什么仍然用 MLP
 -----------------
 
-主线 actor observation 现在是 320 维（含 history flatten），仍在普通 MLP +
+主线 actor observation 现在是 332 维（含 history flatten 与 ``vision_proxy``），仍在普通 MLP +
 obs_normalization 能稳定处理的范围内。
 
 因此当前版本有意不引入：
 
 - 专门的 tactile encoder
 - privileged critic observation
+- 图像 observation / CNN encoder
 - recurrent / transformer 时序建模
 
-History 的 buffer 形状已经准备好，未来 encoder 可以直接接 ``[B, T, …]``
-切片；这些都属于后续扩展项，而不是当前实现缺失。
+当前 scene 中有 ``overhead_debug`` camera 用于 viewer / 调试。Policy 不直接吃图像；
+``vision_proxy`` 是未来图像 encoder 或视觉估计器的替换点。
 
 CLI 入口
 --------

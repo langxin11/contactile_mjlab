@@ -18,15 +18,16 @@
 ==================================================== ================================================
 Task ID                                              作用
 ==================================================== ================================================
-``Mjlab-TactileGrasp-Robotiq2F85``                   主线任务，使用 per-taxel 三轴力（normal/tangential 拆分 + history）
+``Mjlab-TactileGrasp-Robotiq2F85``                   主线任务，top-down pick-lift，使用 5D mocap+gripper 动作与 PTS 触觉
 ==================================================== ================================================
 
 旧的 ``-PTSSpheres`` / ``-TouchSite`` 后缀已经退役；TouchSite 路径在源码层
 也已经删除。
 
-任务范围说明：当前主线是 *tactile gripper baseline*，不是 whole-arm
-manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是机械臂末端的
-6DoF 位姿控制。
+任务范围说明：当前主线是 *top-down tactile pick-lift baseline*，不是完整
+pick-and-place。夹爪具备 ``dx/dy/dz/dyaw`` 末端空间自由度，但这些自由度通过
+mjlab 对 fixed-base 夹爪的 mocap 包装写位姿命令实现，不在 XML 中加入虚拟
+slide/hinge base joints。
 
 代码入口
 --------
@@ -48,17 +49,17 @@ manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是
    ├── constants.py         # TASK_ID、sensor 名称、阈值、关节名
    ├── env_cfgs.py          # make_tactile_grasp_env_cfg(play) —— Scene / Obs / Action / Reward / Done 装配
    ├── robot_cfg.py         # Robotiq + PTS spheres EntityCfg + action cfg
-   ├── object_cfg.py        # hanging_box EntityCfg
+   ├── object_cfg.py        # cube / box / cylinder tabletop EntityCfgs
    ├── paths.py             # 包内资产路径
    ├── rl_cfg.py            # PPO runner cfg
    ├── assets/              # MJCF + props（已迁入包内，pip install 后自带）
    └── mdp/
-       ├── actions.py       # RobotiqCommandAction(Cfg)
+       ├── actions.py       # CartesianMocapAction(Cfg) + RobotiqCommandAction(Cfg)
        ├── actuators.py     # RobotiqGeneralActuator(Cfg) —— XML actuator 包装
-       ├── observations.py  # taxel normal/tangential split、pad wrench、gripper_command
-       ├── rewards.py       # alive / tactile_force_l2 / action_l2 / close_command_l2 / drop_penalty
-       ├── terminations.py  # object_height_below / stable_grasp_hold
-       └── events.py        # re-export mjlab reset_scene_to_default
+       ├── observations.py  # tactile split、pad wrench、vision_proxy、gripper_command
+       ├── rewards.py       # reach / lift / touch / force / action penalties
+       ├── terminations.py  # object_height_below / stable_grasp_hold / workspace
+       └── events.py        # pick-lift reset randomization + curriculum
 
 .. note::
 
@@ -68,11 +69,10 @@ manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是
    ``scripts/check_mjcf.py`` 这类一次性预览用的独立 MJCF（里面写死了
    floor / light / 单个 freejoint object / tendon anchor）。
 
-   mjlab 训练实际加载的是裸夹爪 ``2f85_pts_spheres.xml``
-   （见 ``robot_cfg.py`` 中 ``mujoco.MjSpec.from_file(PTS_SPHERES_XML)``），
-   再由 ``mjlab.scene.Scene`` 把它和 ``object``（``props/hanging_box.xml``）
-   一起 ``attach`` 进 mjlab 自带的 ``scene.xml`` 骨架。修改 ``scene_*.xml``
-   不会影响训练，只影响独立预览。
+   mjlab 训练实际加载的是裸夹爪 ``2f85_pts_spheres.xml``，再由
+   ``mjlab.scene.Scene`` 把它和 tabletop primitive objects（``cube_24mm`` /
+   ``box_tall`` / ``cylinder_24mm``）一起 ``attach`` 进 mjlab 自带的
+   ``scene.xml`` 骨架。修改 ``scene_*.xml`` 不会影响训练，只影响独立预览。
 
 .. note::
 
@@ -118,7 +118,7 @@ manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是
 观测维度
 --------
 
-``obs["actor"]`` 在主线任务下是 320 维：
+``obs["actor"]`` 在主线任务下是 332 维：
 
 .. list-table::
    :header-rows: 1
@@ -172,17 +172,25 @@ manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是
      - ``[B, 6]``
      - 1
      - 6
+   * - vision_proxy
+     - ``[B, 8]``
+     - 1
+     - 8
    * - last_action
-     - ``[B, 1]``
+     - ``[B, 5]``
      - 1
-     - 1
+     - 5
    * - **合计**
      -
      -
-     - **320**
+     - **332**
 
 每个 taxel 的 3D 力按 ``z`` 法向 / ``xy`` 切向拆成两个独立的 ObservationTerm，
 方便后续做不同的 scale / encoder。
+
+``vision_proxy`` 是未来视觉估计器或图像 encoder 的低维替代输入，包含 active
+object 相对夹爪的 ``dx/dy/dz``、相对 yaw 的 ``sin/cos``，以及
+``cube_24mm`` / ``box_tall`` / ``cylinder_24mm`` 的 one-hot 类型。
 
 奖励 / 终止
 -----------
@@ -193,6 +201,9 @@ manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是
 奖励项                权重    作用
 ==================== ======= =====================================
 ``alive``             +1.0   未终止时给 +1
+``reach_xy``          -2.0   惩罚夹爪与 active object 的水平距离
+``lift_height``       +8.0   鼓励 active object 被抬高
+``touch``             +1.0   触觉信号超过阈值时给接触奖励
 ``tactile_force``     -0.01  双指总 taxel force 平方和
 ``action_rate``       -0.001 raw action 平方
 ``close_command``     -0.001 归一化命令 ``(u/255)^2``
@@ -201,13 +212,25 @@ manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是
 
 终止项（来自 ``mdp/terminations.py`` 与 ``mjlab.envs.mdp.time_out``）：
 
-==================== ============ =====================================================
-终止项                类型          条件
-==================== ============ =====================================================
-``time_out``          超时         达到 ``episode_length_s``
-``object_drop``       失败         ``object_height_below(minimum_height=0.08)``
-``stable_grasp``      成功         ``stable_grasp_hold`` 连续 25 步同时满足 height & touch
-==================== ============ =====================================================
+.. list-table::
+   :header-rows: 1
+   :widths: 28 12 60
+
+   * - 终止项
+     - 类型
+     - 条件
+   * - ``time_out``
+     - 超时
+     - 达到 ``episode_length_s``
+   * - ``object_drop``
+     - 失败
+     - active object 低于地面容差
+   * - ``robot_out_of_workspace``
+     - 失败
+     - mocap 命令越过 workspace（正常 clip 下应为 False）
+   * - ``stable_grasp``
+     - 成功
+     - ``stable_grasp_hold`` 连续 25 步同时满足 lift height & touch
 
 ``stable_grasp_hold`` 是一个有状态 termination：每个 env 维护一个计数器，
 每步在 ``height_ok & touch_ok`` 时 +1，否则清零，达到 ``hold_steps`` 返回 True。
@@ -215,14 +238,18 @@ manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是
 动作
 ----
 
-一维连续动作 ``Δu ∈ [-1, 1]``，由 ``RobotiqCommandAction`` 内部累积：
+五维连续动作 ``[dx, dy, dz, dyaw, du] ∈ [-1, 1]^5``，由
+``CartesianMocapAction`` 内部累积：
 
 .. code-block:: text
 
-   u_new = clip(u + action * delta_u_max, 0, 255)
+   p_new = clip(p + [dx, dy, dz] * 0.01, workspace)
+   yaw_new = clip(yaw + dyaw * 0.05, [-pi, pi])
+   u_new = clip(u + du * delta_u_max, 0, 255)
 
-写入 XML 中的 ``split`` tendon target，再走原始 2F-85 general actuator
-（通过 ``RobotiqGeneralActuator`` 包装为 position-like 字段）。
+``p/yaw`` 写入 robot mocap pose，``u`` 写入 XML 中的 ``split`` tendon target。
+MuJoCo 侧仍然使用原始 2F-85 的 tendon + general actuator 抽象，没有引入理想
+force actuator。
 
 运行时数据流
 ------------
@@ -230,12 +257,12 @@ manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是
 ::
 
    policy(obs["actor"])
-      -> action ∈ [-1, 1]
-      -> RobotiqCommandAction.process_actions()  # 累积到 u
-      -> RobotiqCommandAction.apply_actions()    # 写 tendon target
+      -> action ∈ [-1, 1]^5
+      -> CartesianMocapAction.process_actions()  # 累积到 mocap pose + u
+      -> CartesianMocapAction.apply_actions()    # 写 mocap pose + tendon target
       -> MuJoCo step (decimation=10, dt=0.002)
       -> builtin force/torque sensors update
-      -> mdp.observations 拼装 320 维 actor obs（带 history buffer）
+      -> mdp.observations 拼装 332 维 actor obs（带 history buffer）
       -> mdp.rewards / mdp.terminations 计算 reward 与 termination
       -> env 返回 obs, reward, terminated, truncated
 
@@ -249,7 +276,12 @@ train / play 差异
 - ``cfg.observations["actor"].enable_corruption = False``
 
 其余（actor / critic 观测、reward、terminations、actuator）与 train 完全一致。
-当前不做 domain randomization。
+play 模式的 reset/curriculum 固定为 Stage 2，用于 viewer 中检查完整随机范围。
+train 模式按 ``common_step_counter`` 逐步开放随机范围：
+
+- Stage 0：只用 cube，物体固定中心，夹爪对准物体。
+- Stage 1：启用 cube/box，物体 ``xy`` 和 yaw 小范围随机。
+- Stage 2：启用 cube/box/cylinder，物体 ``xy`` 和 yaw 全范围随机。
 
 与 mjlab 的关系
 ---------------
@@ -266,7 +298,7 @@ train / play 差异
 - MJCF 编译检查
 - ``reset()`` / ``step()`` smoke test（``scripts/smoke_env.py``）
 - Viewer 可视化（``scripts/view_env.py``）
-- 观测维度回归测试（``tests/test_observation_shapes.py`` ⇒ 320）
+- 观测维度回归测试（``tests/test_observation_shapes.py`` ⇒ 332）
 - 最小 PPO smoke run（``WANDB_MODE=offline ... --agent.max-iterations 100``）
 
 当前明确未实现 / 后续项
@@ -276,7 +308,7 @@ train / play 差异
 - 目标接触过滤（区分目标物体 vs 其他几何）
 - 迁移到 mjlab managed contact sensor 接口
 - 长期 PPO 收敛 benchmark
-- domain randomization
+- 图像 observation / CNN policy（当前只有 debug camera，policy 使用 ``vision_proxy``）
 - sim2real 部署链路
 
 文档地图

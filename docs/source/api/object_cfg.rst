@@ -1,7 +1,7 @@
 ``tactile_grasp.object_cfg``
 ============================
 
-被抓取物体（``hanging_box``）的 ``EntityCfg`` 构造。
+top-down pick-lift 任务使用的 tabletop primitive object ``EntityCfg`` 构造。
 
 .. automodule:: tactile_grasp.object_cfg
    :members:
