@@ -60,6 +60,38 @@ manipulation。动作接口固定为 Robotiq 2F-85 的一维 ``Δu``，而不是
        ├── terminations.py  # object_height_below / stable_grasp_hold
        └── events.py        # re-export mjlab reset_scene_to_default
 
+.. note::
+
+   ``assets/robotiq_2f85/`` 下的 ``scene_*.xml``（``scene.xml`` /
+   ``scene_pts_spheres.xml`` / ``scene_tactile.xml``）**不是训练入口**，
+   只是给 ``mujoco.viewer.launch`` / ``scripts/view_env.py`` /
+   ``scripts/check_mjcf.py`` 这类一次性预览用的独立 MJCF（里面写死了
+   floor / light / 单个 freejoint object / tendon anchor）。
+
+   mjlab 训练实际加载的是裸夹爪 ``2f85_pts_spheres.xml``
+   （见 ``robot_cfg.py`` 中 ``mujoco.MjSpec.from_file(PTS_SPHERES_XML)``），
+   再由 ``mjlab.scene.Scene`` 把它和 ``object``（``props/hanging_box.xml``）
+   一起 ``attach`` 进 mjlab 自带的 ``scene.xml`` 骨架。修改 ``scene_*.xml``
+   不会影响训练，只影响独立预览。
+
+.. note::
+
+   **多环境如何在物理层分散**：``SceneCfg`` 里挂了
+   ``terrain=TerrainEntityCfg(terrain_type="plane")``，这一项做两件事：
+
+   1. 给场景加一块共享地面（mjlab ``scene.xml`` 骨架本身没有 floor）。
+   2. 让 ``TerrainEntity`` 用 ``env_spacing`` 生成 ``env_origins`` 网格。
+
+   配合 mjlab 对 fixed-base entity 的 ``auto_wrap_fixed_base_mocap`` 自动
+   mocap 包装，``reset_scene_to_default`` 每次会把每个 env 的夹爪 mocap
+   pose 写到对应格点，多 env 在 **物理 + 可视化** 两层都自然分开，不需要
+   任何 viewer 侧补丁。
+
+   历史上仓库里曾存在 ``scripts/play_tiled.py`` +
+   ``src/tactile_grasp/viewer_tiling.py``，那是早期没用 terrain 时为了在
+   viser viewer 里看到多 env 而做的纯视觉 monkey-patch；现已退役删除。
+   想避免回归请看 ``tests/test_no_viewer_tiling_hack.py``。
+
 任务注册
 --------
 
