@@ -36,70 +36,86 @@ def pick_lift_curriculum(
     return {"stage": stage}
 
 
-def reset_pick_lift_scene(
-    env: "ManagerBasedRlEnv",
-    env_ids: torch.Tensor | None,
-    force_stage: int | None = None,
-) -> None:
-    """Reset tabletop objects and top-down robot mocap pose."""
-    if env_ids is None:
-        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)
-    reset_scene_to_default(env, env_ids)
-    stage = pick_lift_curriculum(env, env_ids, force_stage=force_stage)["stage"]
-    cfg = _stage_cfg(stage)
+class reset_pick_lift_scene:
+    """Reset tabletop objects and top-down robot mocap pose.
 
-    num = len(env_ids)
-    active_ids = _sample_active_ids(num, cfg["object_ids"], env.device)
-    xy_range = float(cfg["xy_range"])
-    yaw_range = float(cfg["yaw_range"])
-    object_xy = (torch.rand((num, 2), device=env.device) * 2.0 - 1.0) * xy_range
-    object_yaw = (torch.rand(num, device=env.device) * 2.0 - 1.0) * yaw_range
-    robot_xy = object_xy + (torch.rand((num, 2), device=env.device) * 2.0 - 1.0) * float(
-        cfg["robot_xy_offset"]
-    )
-    robot_yaw = object_yaw + (torch.rand(num, device=env.device) * 2.0 - 1.0) * float(
-        cfg["robot_yaw_offset"]
-    )
+    Class-based event term: __init__ runs during EventManager construction,
+    which is before ObservationManager dry-runs the observation terms. We
+    pre-allocate the per-env caches there so observation helpers' strict
+    "must be initialized" guards see valid (zero) state during shape
+    detection, while the actual sampling still happens on reset.
+    """
 
-    _ensure_buffers(env)
-    env._tactile_active_object_ids[env_ids] = active_ids
-    env._tactile_active_object_local_pos[env_ids, :2] = object_xy
-    env._tactile_active_object_local_yaw[env_ids] = object_yaw
+    def __init__(self, cfg, env: "ManagerBasedRlEnv") -> None:
+        """Pre-allocate per-env caches so observation dry-run sees valid state."""
+        del cfg
+        _ensure_buffers(env)
 
-    half_heights = torch.tensor(OBJECT_HALF_HEIGHTS, device=env.device, dtype=torch.float32)
-    env._tactile_active_object_local_pos[env_ids, 2] = half_heights[active_ids]
-    env._tactile_active_object_init_z[env_ids] = (
-        half_heights[active_ids] + env.scene.env_origins[env_ids, 2]
-    )
+    def __call__(
+        self,
+        env: "ManagerBasedRlEnv",
+        env_ids: torch.Tensor | None,
+        force_stage: int | None = None,
+    ) -> None:
+        """Sample stage cfg, place active object on table, and command top-down mocap."""
+        if env_ids is None:
+            env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)
+        reset_scene_to_default(env, env_ids)
+        stage = pick_lift_curriculum(env, env_ids, force_stage=force_stage)["stage"]
+        cfg = _stage_cfg(stage)
 
-    for object_id, object_name in enumerate(OBJECT_ENTITY_NAMES):
-        entity = env.scene[object_name]
-        root_state = torch.zeros((num, 13), device=env.device, dtype=torch.float32)
-        root_state[:, 3] = 1.0
-        local_pos = torch.zeros((num, 3), device=env.device, dtype=torch.float32)
-        inactive_x = 1.5 + float(object_id) * 0.25
-        local_pos[:, 0] = inactive_x
-        local_pos[:, 1] = 1.5
-        local_pos[:, 2] = half_heights[object_id]
+        num = len(env_ids)
+        active_ids = _sample_active_ids(num, cfg["object_ids"], env.device)
+        xy_range = float(cfg["xy_range"])
+        yaw_range = float(cfg["yaw_range"])
+        object_xy = (torch.rand((num, 2), device=env.device) * 2.0 - 1.0) * xy_range
+        object_yaw = (torch.rand(num, device=env.device) * 2.0 - 1.0) * yaw_range
+        robot_xy = object_xy + (torch.rand((num, 2), device=env.device) * 2.0 - 1.0) * float(
+            cfg["robot_xy_offset"]
+        )
+        robot_yaw = object_yaw + (torch.rand(num, device=env.device) * 2.0 - 1.0) * float(
+            cfg["robot_yaw_offset"]
+        )
 
-        active_mask = active_ids == object_id
-        if torch.any(active_mask):
-            local_pos[active_mask, :2] = object_xy[active_mask]
-            local_pos[active_mask, 2] = half_heights[object_id]
-            root_state[active_mask, 3:7] = _yaw_quat(object_yaw[active_mask])
+        _ensure_buffers(env)
+        env._tactile_active_object_ids[env_ids] = active_ids
+        env._tactile_active_object_local_pos[env_ids, :2] = object_xy
+        env._tactile_active_object_local_yaw[env_ids] = object_yaw
 
-        root_state[:, 0:3] = local_pos + env.scene.env_origins[env_ids]
-        entity.write_root_state_to_sim(root_state, env_ids=env_ids)
+        half_heights = torch.tensor(OBJECT_HALF_HEIGHTS, device=env.device, dtype=torch.float32)
+        env._tactile_active_object_local_pos[env_ids, 2] = half_heights[active_ids]
+        env._tactile_active_object_init_z[env_ids] = (
+            half_heights[active_ids] + env.scene.env_origins[env_ids, 2]
+        )
 
-    robot_pos = torch.zeros((num, 3), device=env.device, dtype=torch.float32)
-    robot_pos[:, :2] = robot_xy
-    robot_pos[:, 2] = 0.24
-    env._tactile_robot_init_pos_local[env_ids] = robot_pos
-    env._tactile_robot_init_yaw[env_ids] = robot_yaw
+        for object_id, object_name in enumerate(OBJECT_ENTITY_NAMES):
+            entity = env.scene[object_name]
+            root_state = torch.zeros((num, 13), device=env.device, dtype=torch.float32)
+            root_state[:, 3] = 1.0
+            local_pos = torch.zeros((num, 3), device=env.device, dtype=torch.float32)
+            inactive_x = 1.5 + float(object_id) * 0.25
+            local_pos[:, 0] = inactive_x
+            local_pos[:, 1] = 1.5
+            local_pos[:, 2] = half_heights[object_id]
 
-    action = env.action_manager.get_term("cartesian_gripper")
-    if isinstance(action, CartesianMocapAction):
-        action.set_pose_command(robot_pos, robot_yaw, env_ids=env_ids)
+            active_mask = active_ids == object_id
+            if torch.any(active_mask):
+                local_pos[active_mask, :2] = object_xy[active_mask]
+                local_pos[active_mask, 2] = half_heights[object_id]
+                root_state[active_mask, 3:7] = _yaw_quat(object_yaw[active_mask])
+
+            root_state[:, 0:3] = local_pos + env.scene.env_origins[env_ids]
+            entity.write_root_state_to_sim(root_state, env_ids=env_ids)
+
+        robot_pos = torch.zeros((num, 3), device=env.device, dtype=torch.float32)
+        robot_pos[:, :2] = robot_xy
+        robot_pos[:, 2] = 0.24
+        env._tactile_robot_init_pos_local[env_ids] = robot_pos
+        env._tactile_robot_init_yaw[env_ids] = robot_yaw
+
+        action = env.action_manager.get_term("cartesian_gripper")
+        if isinstance(action, CartesianMocapAction):
+            action.set_pose_command(robot_pos, robot_yaw, env_ids=env_ids)
 
 
 def _stage_cfg(stage: int) -> dict[str, float | tuple[int, ...]]:
