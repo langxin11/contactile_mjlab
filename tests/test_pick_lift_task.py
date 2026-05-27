@@ -41,6 +41,15 @@ def test_cartesian_action_clips_to_workspace_bounds() -> None:
     assert torch.all(action.yaw_command <= action.cfg.yaw_range[1])
 
 
+def test_cartesian_action_step_writes_all_env_mocaps() -> None:
+    """Stepping with all envs must write mocap pose with mjlab-compatible indexing."""
+    env = _make_env(num_envs=3)
+    env.reset()
+
+    action = torch.zeros((env.num_envs, env.action_manager.total_action_dim), device=env.device)
+    env.step(action)
+
+
 def test_reset_activates_one_tabletop_object_per_env() -> None:
     """Reset must place exactly one object variant on the table in each env."""
     env = _make_env(num_envs=6)

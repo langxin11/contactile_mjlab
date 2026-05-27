@@ -149,8 +149,7 @@ class CartesianMocapAction(ActionTerm):
 
     def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
         """Reset Cartesian command, yaw, and Robotiq command state."""
-        if env_ids is None:
-            env_ids = slice(None)
+        env_ids = self._resolve_env_ids(env_ids)
         self._raw_action[env_ids] = 0.0
         self._command[env_ids] = float(self.cfg.init_u)
 
@@ -205,15 +204,13 @@ class CartesianMocapAction(ActionTerm):
         env_ids: torch.Tensor | slice | None = None,
     ) -> None:
         """Set the Cartesian command buffer from a reset event."""
-        if env_ids is None:
-            env_ids = slice(None)
+        env_ids = self._resolve_env_ids(env_ids)
         self._pose_command_local[env_ids] = pos_local
         self._yaw_command[env_ids] = yaw
         self._write_mocap_pose(env_ids)
 
     def _write_mocap_pose(self, env_ids: torch.Tensor | slice | None = None) -> None:
-        if env_ids is None:
-            env_ids = slice(None)
+        env_ids = self._resolve_env_ids(env_ids)
         pos_local = self._pose_command_local[env_ids]
         yaw = self._yaw_command[env_ids]
         origins = self._env.scene.env_origins[env_ids]
@@ -221,6 +218,13 @@ class CartesianMocapAction(ActionTerm):
         pose[:, 0:3] = pos_local + origins
         pose[:, 3:7] = _top_down_yaw_quat(yaw)
         self._entity.write_mocap_pose_to_sim(pose, env_ids=env_ids)
+
+    def _resolve_env_ids(self, env_ids: torch.Tensor | slice | None) -> torch.Tensor:
+        if env_ids is None:
+            return torch.arange(self.num_envs, device=self.device, dtype=torch.long)
+        if isinstance(env_ids, slice):
+            return torch.arange(self.num_envs, device=self.device, dtype=torch.long)[env_ids]
+        return env_ids
 
 
 def _top_down_yaw_quat(yaw: torch.Tensor) -> torch.Tensor:
