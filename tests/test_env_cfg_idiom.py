@@ -41,3 +41,19 @@ def test_load_env_cfg_no_override_whitelist():
     cfg = load_env_cfg(play=False)
     cfg.scene.num_envs = 32
     assert cfg.scene.num_envs == 32
+
+
+def test_scene_uses_plane_terrain_for_per_env_origins():
+    """SceneCfg 必须带 plane terrain，否则 env_origins 全零、多 env 夹爪在 viewer 中会重合.
+
+    背景：mjlab 自动把 fixed-base 夹爪包成 mocap，reset_scene_to_default 会把
+    env_origins 写到 mocap pose；只有 terrain != None 时 env_origins 才是网格.
+    """
+    from mjlab.terrains import TerrainEntityCfg
+
+    from tactile_grasp.env_cfgs import make_tactile_grasp_env_cfg
+
+    cfg = make_tactile_grasp_env_cfg(play=False)
+    assert cfg.scene.terrain is not None, "SceneCfg.terrain is None — 多 env 会全部重合"
+    assert isinstance(cfg.scene.terrain, TerrainEntityCfg)
+    assert cfg.scene.terrain.terrain_type == "plane"

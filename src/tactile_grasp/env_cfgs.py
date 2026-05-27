@@ -13,6 +13,7 @@ from mjlab.managers import (
 )
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
+from mjlab.terrains import TerrainEntityCfg
 from mjlab.viewer import ViewerConfig
 
 from .constants import (
@@ -124,6 +125,7 @@ def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
             entities={"robot": build_robot_cfg(), "object": build_object_cfg()},
             num_envs=NUM_ENVS,
             env_spacing=ENV_SPACING,
+            terrain=TerrainEntityCfg(terrain_type="plane"),
         ),
         observations={
             "actor": ObservationGroupCfg(actor_terms, enable_corruption=False),
