@@ -13,6 +13,10 @@ if TYPE_CHECKING:
     from mjlab.envs import ManagerBasedRlEnv
 
 
+TAXEL_TANGENTIAL_FORCE_LIMIT = 4.0
+TAXEL_NORMAL_FORCE_LIMIT = 15.0
+
+
 def _sensor_tensor(env: "ManagerBasedRlEnv", name: str) -> torch.Tensor:
     """Read one XML-defined builtin sensor by prefixed name."""
     return env.scene[name].data
@@ -111,6 +115,45 @@ def _stack_taxel_force(
     return torch.stack(per_taxel, dim=1)
 
 
+def _clip_taxel_force(force: torch.Tensor) -> torch.Tensor:
+    """Clip taxel force to the configured sensor range."""
+    clipped = force.clone()
+    clipped[..., :2] = torch.clamp(
+        clipped[..., :2],
+        min=-TAXEL_TANGENTIAL_FORCE_LIMIT,
+        max=TAXEL_TANGENTIAL_FORCE_LIMIT,
+    )
+    clipped[..., 2] = torch.clamp(
+        clipped[..., 2],
+        min=-TAXEL_NORMAL_FORCE_LIMIT,
+        max=TAXEL_NORMAL_FORCE_LIMIT,
+    )
+    return clipped
+
+
+def tool_position(env: "ManagerBasedRlEnv") -> torch.Tensor:
+    """Return the tool reference point in world frame."""
+    robot = env.scene["robot"]
+    find_sites = getattr(robot, "find_sites", None)
+    if callable(find_sites):
+        local_site_ids, site_names = find_sites(("left_pad_ft_site", "right_pad_ft_site"))
+        if len(local_site_ids) == 2 and set(site_names) == {
+            "left_pad_ft_site",
+            "right_pad_ft_site",
+        }:
+            site_ids = robot.indexing.site_ids[local_site_ids]
+            site_positions = env.sim.data.site_xpos[:, site_ids, :]
+            return site_positions.mean(dim=1)
+
+    action_term = env.action_manager.get_term("cartesian_gripper")
+    pose_command_local = getattr(action_term, "pose_command_local", None)
+    env_origins = getattr(env.scene, "env_origins", None)
+    if pose_command_local is not None and env_origins is not None:
+        return pose_command_local + env_origins
+
+    return robot_position(env)
+
+
 def taxel_normal_force(
     env: "ManagerBasedRlEnv",
     sensor_names: tuple[str, ...],
@@ -120,7 +163,7 @@ def taxel_normal_force(
 
     PTS sphere taxel site-local frame: z = normal (out of finger), xy = tangential.
     """
-    stacked = _stack_taxel_force(env, sensor_names, entity_name)
+    stacked = _clip_taxel_force(_stack_taxel_force(env, sensor_names, entity_name))
     return stacked[..., 2]
 
 
@@ -130,9 +173,35 @@ def taxel_tangential_force(
     entity_name: str = "robot",
 ) -> torch.Tensor:
     """Per-taxel tangential force (xy), flattened to (N, 2 * n_taxels)."""
-    stacked = _stack_taxel_force(env, sensor_names, entity_name)
+    stacked = _clip_taxel_force(_stack_taxel_force(env, sensor_names, entity_name))
     tangential = stacked[..., :2]
     return tangential.reshape(tangential.shape[0], -1)
+
+
+def taxel_contact_mask(
+    env: "ManagerBasedRlEnv",
+    sensor_names: tuple[str, ...],
+    entity_name: str = "robot",
+    threshold: float = 0.05,
+) -> torch.Tensor:
+    """Return whether each taxel is active based on its 3D force norm."""
+    stacked = _stack_taxel_force(env, sensor_names, entity_name)
+    return torch.linalg.vector_norm(stacked, dim=-1) > threshold
+
+
+def taxel_contact_count(
+    env: "ManagerBasedRlEnv",
+    sensor_names: tuple[str, ...],
+    entity_name: str = "robot",
+    threshold: float = 0.05,
+) -> torch.Tensor:
+    """Count active taxels for each env."""
+    return taxel_contact_mask(
+        env,
+        sensor_names=sensor_names,
+        entity_name=entity_name,
+        threshold=threshold,
+    ).sum(dim=1, dtype=torch.int64)
 
 
 def pad_force(
