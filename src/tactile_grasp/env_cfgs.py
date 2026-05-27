@@ -5,6 +5,7 @@ from __future__ import annotations
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs.mdp import joint_pos_rel, joint_vel_rel, last_action, time_out
 from mjlab.managers import (
+    CurriculumTermCfg,
     EventTermCfg,
     ObservationGroupCfg,
     ObservationTermCfg,
@@ -14,6 +15,7 @@ from mjlab.managers import (
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.terrains import TerrainEntityCfg
+from mjlab.utils.spec_config import CameraCfg, LightCfg
 from mjlab.viewer import ViewerConfig
 
 from .constants import (
@@ -25,7 +27,7 @@ from .constants import (
 )
 from .mdp import events, rewards, terminations
 from .mdp import observations as obs
-from .object_cfg import build_object_cfg
+from .object_cfg import build_object_cfgs
 from .robot_cfg import build_action_cfg, build_robot_cfg
 
 DECIMATION = 10
@@ -47,11 +49,14 @@ NUM_ENVS = 64
 PLAY_NUM_ENVS = 1
 ENV_SPACING = 0.5
 
-DROP_HEIGHT = 0.08
-SUCCESS_HEIGHT = 0.14
+DROP_HEIGHT = 0.002
+SUCCESS_HEIGHT = 0.08
 SUCCESS_HOLD_STEPS = 25
 
 W_ALIVE = 1.0
+W_REACH_XY = -2.0
+W_LIFT_HEIGHT = 8.0
+W_TOUCH = 1.0
 W_TACTILE_FORCE = -0.01
 W_ACTION_RATE = -0.001
 W_CLOSE_COMMAND = -0.001
@@ -112,31 +117,70 @@ def _actor_observation_terms() -> dict[str, ObservationTermCfg]:
         "gripper_command": ObservationTermCfg(func=obs.gripper_command),
         "joint_pos": ObservationTermCfg(func=joint_pos_rel, params={"asset_cfg": ROBOT_JOINT_CFG}),
         "joint_vel": ObservationTermCfg(func=joint_vel_rel, params={"asset_cfg": ROBOT_JOINT_CFG}),
+        "vision_proxy": ObservationTermCfg(func=obs.vision_proxy),
         "last_action": ObservationTermCfg(func=last_action),
     }
+
+
+def _add_debug_camera_and_light(spec) -> None:
+    """Add debug camera/light for viewer and future image work."""
+    CameraCfg(
+        name="overhead_debug",
+        body="world",
+        mode="fixed",
+        fovy=45.0,
+        pos=(0.0, -0.32, 0.42),
+        quat=(0.9238795, 0.3826834, 0.0, 0.0),
+    ).edit_spec(spec)
+    LightCfg(
+        name="overhead_key",
+        body="world",
+        mode="fixed",
+        type="spot",
+        pos=(0.0, -0.25, 0.45),
+        dir=(0.0, 0.4, -1.0),
+        cutoff=60.0,
+    ).edit_spec(spec)
 
 
 def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     """Build the tactile_grasp env cfg; if play=True, apply play overrides to the fresh cfg."""
     actor_terms = _actor_observation_terms()
+    force_stage = 2 if play else None
 
     cfg = ManagerBasedRlEnvCfg(
         scene=SceneCfg(
-            entities={"robot": build_robot_cfg(), "object": build_object_cfg()},
+            entities={"robot": build_robot_cfg(), **build_object_cfgs()},
             num_envs=NUM_ENVS,
             env_spacing=ENV_SPACING,
             terrain=TerrainEntityCfg(terrain_type="plane"),
+            spec_fn=_add_debug_camera_and_light,
         ),
         observations={
             "actor": ObservationGroupCfg(actor_terms, enable_corruption=False),
             "critic": ObservationGroupCfg(dict(actor_terms), enable_corruption=False),
         },
-        actions={"gripper_command": build_action_cfg(DELTA_U_MAX)},
+        actions={"cartesian_gripper": build_action_cfg(DELTA_U_MAX)},
         events={
-            "reset_scene_to_default": EventTermCfg(func=events.reset_scene_to_default, mode="reset")
+            "reset_pick_lift_scene": EventTermCfg(
+                func=events.reset_pick_lift_scene,
+                mode="reset",
+                params={"force_stage": force_stage},
+            )
         },
         rewards={
             "alive": RewardTermCfg(func=rewards.alive, weight=W_ALIVE),
+            "reach_xy": RewardTermCfg(func=rewards.reach_xy, weight=W_REACH_XY),
+            "lift_height": RewardTermCfg(func=rewards.lift_height, weight=W_LIFT_HEIGHT),
+            "touch": RewardTermCfg(
+                func=rewards.tactile_contact,
+                weight=W_TOUCH,
+                params={
+                    "left_sensor_names": LEFT_TAXEL_FORCE_SENSOR_NAMES,
+                    "right_sensor_names": RIGHT_TAXEL_FORCE_SENSOR_NAMES,
+                    "threshold": TACTILE_ACTIVITY_THRESHOLD,
+                },
+            ),
             "tactile_force": RewardTermCfg(
                 func=rewards.tactile_force_l2,
                 weight=W_TACTILE_FORCE,
@@ -146,7 +190,11 @@ def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
                 },
             ),
             "action_rate": RewardTermCfg(func=rewards.action_l2, weight=W_ACTION_RATE),
-            "close_command": RewardTermCfg(func=rewards.close_command_l2, weight=W_CLOSE_COMMAND),
+            "close_command": RewardTermCfg(
+                func=rewards.close_command_l2,
+                weight=W_CLOSE_COMMAND,
+                params={"action_name": "cartesian_gripper"},
+            ),
             "drop_penalty": RewardTermCfg(func=rewards.drop_penalty, weight=W_DROP_PENALTY),
         },
         terminations={
@@ -155,6 +203,7 @@ def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
                 func=terminations.object_height_below,
                 params={"minimum_height": DROP_HEIGHT, "asset_cfg": OBJECT_CFG},
             ),
+            "robot_out_of_workspace": TerminationTermCfg(func=terminations.robot_out_of_workspace),
             "stable_grasp": TerminationTermCfg(
                 func=terminations.stable_grasp_hold,
                 params={
@@ -169,6 +218,12 @@ def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         },
         sim=SimulationCfg(mujoco=MujocoCfg(timestep=TIMESTEP, cone="elliptic", impratio=10.0)),
         viewer=ViewerConfig(),
+        curriculum={
+            "pick_lift_stage": CurriculumTermCfg(
+                func=events.pick_lift_curriculum,
+                params={"force_stage": force_stage},
+            )
+        },
         decimation=DECIMATION,
         episode_length_s=EPISODE_LENGTH_S,
         auto_reset=True,

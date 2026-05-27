@@ -1,0 +1,16 @@
+<mujoco model="cylinder_24mm">
+  <worldbody>
+    <body name="object" pos="0 0 0.012">
+      <freejoint name="object_root" />
+      <geom
+        name="cylinder_24mm_geom"
+        type="cylinder"
+        size="0.012 0.012"
+        mass="0.045"
+        rgba="0.42 0.55 0.85 1"
+        friction="0.75 0.03 0.01"
+        priority="1"
+      />
+    </body>
+  </worldbody>
+</mujoco>

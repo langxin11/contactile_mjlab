@@ -30,4 +30,8 @@ ROBOT_JOINT_NAMES = (
 )
 
 ROBOT_JOINT_CFG = SceneEntityCfg("robot", joint_names=ROBOT_JOINT_NAMES)
-OBJECT_CFG = SceneEntityCfg("object")
+
+OBJECT_ENTITY_NAMES = ("cube_24mm", "box_tall", "cylinder_24mm")
+OBJECT_HALF_HEIGHTS = (0.012, 0.024, 0.012)
+OBJECT_CFGS = tuple(SceneEntityCfg(name) for name in OBJECT_ENTITY_NAMES)
+OBJECT_CFG = OBJECT_CFGS[0]

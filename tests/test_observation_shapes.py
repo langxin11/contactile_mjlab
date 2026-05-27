@@ -6,7 +6,7 @@ from tactile_grasp import make_env
 
 
 def test_actor_obs_dim_with_history():
-    """Single-frame 80 → 320 after history stacking on tactile + wrench groups."""
+    """Pick-lift actor obs includes tactile history, vision proxy, and 5D last action."""
     env = make_env()
     obs, _ = env.reset()
     actor = obs["actor"]
@@ -15,9 +15,9 @@ def test_actor_obs_dim_with_history():
     # taxel_tangential 两边 36 → 180 (×5)
     # pad_force 两边 6 → 18 (×3)
     # pad_torque 两边 6 → 18 (×3)
-    # joint_pos+vel 12 + gripper_cmd 1 + last_action 1 = 14
-    # 总和 90 + 180 + 18 + 18 + 12 + 1 + 1 = 320
-    assert actor.shape == (env.num_envs, 320), actor.shape
+    # joint_pos+vel 12 + gripper_cmd 1 + vision_proxy 8 + last_action 5 = 26
+    # 总和 90 + 180 + 18 + 18 + 12 + 1 + 8 + 5 = 332
+    assert actor.shape == (env.num_envs, 332), actor.shape
 
 
 def test_normal_force_dim():

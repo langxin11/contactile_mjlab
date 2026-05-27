@@ -1,0 +1,16 @@
+<mujoco model="cube_24mm">
+  <worldbody>
+    <body name="object" pos="0 0 0.012">
+      <freejoint name="object_root" />
+      <geom
+        name="cube_24mm_geom"
+        type="box"
+        size="0.012 0.012 0.012"
+        mass="0.05"
+        rgba="0.45 0.70 0.50 1"
+        friction="0.8 0.03 0.01"
+        priority="1"
+      />
+    </body>
+  </worldbody>
+</mujoco>

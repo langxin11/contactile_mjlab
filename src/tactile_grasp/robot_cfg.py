@@ -6,7 +6,7 @@ import mujoco
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 from mjlab.entity.entity import TransmissionType
 
-from .mdp.actions import RobotiqCommandActionCfg
+from .mdp.actions import CartesianMocapActionCfg
 from .mdp.actuators import RobotiqGeneralActuatorCfg
 from .paths import PTS_SPHERES_XML
 
@@ -43,9 +43,9 @@ def build_robot_cfg() -> EntityCfg:
     )
 
 
-def build_action_cfg(delta_u_max: float) -> RobotiqCommandActionCfg:
-    """Robotiq Δu 动作 config."""
-    return RobotiqCommandActionCfg(
+def build_action_cfg(delta_u_max: float) -> CartesianMocapActionCfg:
+    """Cartesian mocap + Robotiq Δu action config."""
+    return CartesianMocapActionCfg(
         entity_name="robot",
         actuator_name="fingers_actuator",
         tendon_name="split",

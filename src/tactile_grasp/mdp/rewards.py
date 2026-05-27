@@ -58,3 +58,31 @@ def close_command_l2(
 def drop_penalty(env: "ManagerBasedRlEnv") -> torch.Tensor:
     """物体掉落 termination 命中时的负奖励通道."""
     return env.termination_manager.get_term("object_drop").float()
+
+
+def reach_xy(env: "ManagerBasedRlEnv") -> torch.Tensor:
+    """Active object 与夹爪水平距离."""
+    delta = obs.active_object_position(env)[:, :2] - obs.robot_position(env)[:, :2]
+    return torch.linalg.norm(delta, dim=1)
+
+
+def lift_height(env: "ManagerBasedRlEnv") -> torch.Tensor:
+    """Active object root height."""
+    return obs.active_object_position(env)[:, 2]
+
+
+def tactile_contact(
+    env: "ManagerBasedRlEnv",
+    left_sensor_names: tuple[str, ...],
+    right_sensor_names: tuple[str, ...],
+    threshold: float,
+    entity_name: str = "robot",
+) -> torch.Tensor:
+    """Return 1 when tactile signal exceeds threshold."""
+    signal = total_tactile_signal(
+        env,
+        left_sensor_names=left_sensor_names,
+        right_sensor_names=right_sensor_names,
+        entity_name=entity_name,
+    )
+    return (signal > threshold).float()

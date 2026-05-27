@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch
-from mjlab.entity import Entity
 from mjlab.managers import SceneEntityCfg
 
 from ..constants import OBJECT_CFG
+from . import observations as obs
 from . import rewards as rew
 
 if TYPE_CHECKING:
@@ -19,9 +19,9 @@ def object_height(
     env: "ManagerBasedRlEnv",
     asset_cfg: SceneEntityCfg = OBJECT_CFG,
 ) -> torch.Tensor:
-    """物体根 link 的 z 坐标."""
-    asset: Entity = env.scene[asset_cfg.name]
-    return asset.data.root_link_pos_w[:, 2]
+    """Active object root link 的 z 坐标."""
+    del asset_cfg
+    return obs.active_object_position(env)[:, 2]
 
 
 def object_height_below(
@@ -31,6 +31,22 @@ def object_height_below(
 ) -> torch.Tensor:
     """物体低于阈值时终止."""
     return object_height(env, asset_cfg=asset_cfg) < minimum_height
+
+
+def robot_out_of_workspace(env: "ManagerBasedRlEnv", margin: float = 1.0e-4) -> torch.Tensor:
+    """夹爪 mocap 命令越过 workspace 时终止（正常 clipping 下应为 False）."""
+    action = env.action_manager.get_term("cartesian_gripper")
+    pos = action.pose_command_local
+    cfg = action.cfg
+    out = (
+        (pos[:, 0] < cfg.x_range[0] - margin)
+        | (pos[:, 0] > cfg.x_range[1] + margin)
+        | (pos[:, 1] < cfg.y_range[0] - margin)
+        | (pos[:, 1] > cfg.y_range[1] + margin)
+        | (pos[:, 2] < cfg.z_range[0] - margin)
+        | (pos[:, 2] > cfg.z_range[1] + margin)
+    )
+    return out
 
 
 class stable_grasp_hold:

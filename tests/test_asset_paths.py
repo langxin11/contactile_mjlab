@@ -20,6 +20,9 @@ from tactile_grasp import paths
         paths.PTS_SPHERES_XML,
         paths.PTS_SPHERES_SCENE_XML,
         paths.HANGING_BOX_XML,
+        paths.CUBE_24MM_XML,
+        paths.BOX_TALL_XML,
+        paths.CYLINDER_24MM_XML,
     ],
 )
 def test_xml_loadable(xml_path: Path) -> None:
