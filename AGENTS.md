@@ -2,163 +2,177 @@
 
 ## 角色
 
-本文件是仓库协作规范，不是研究方案，不是实现进度看板，也不是设计文档索引。
+本文件是仓库的协作契约，收集 agent 和人在动手前都应该知道、且不容易从代码里直接读出来的东西。
 
-- 路线与原则：看 `plan.md`
-- 当前实现现状：看 `docs/source/design/task_architecture.rst`
-- 具体实现细节：看 `docs/source/design/` 下各专题页
+不是研究方案，不是实现进度看板，不是设计文档索引：
 
-## 当前目标
+- 当前实现状态（task ID、观测维度、history 长度等会随调参改动的事实）：看 `docs/source/design/task_architecture.rst` 及 `docs/source/design/` 下各专题页
+- 安装与运行命令：看 `docs/source/install.rst`、`docs/source/usage.rst`
 
-当前主线目标是先建立一个可验证、可训练的 MuJoCo tactile gripper baseline，而不是立即做完整 sim2real 系统。
+写每一条之前的判断标准：**会随某次 PR 漂掉的事实不要写进 AGENTS.md。** 把会漂的事实留给代码、design 文档或 `pyproject.toml`。
 
-当前优先级固定为：
+---
 
-1. `MJCF` 可加载
+## 1. 当前阶段目标
+
+当前主线目标：建立一个**可验证、可训练的 MuJoCo tactile gripper baseline**，不是完整 sim2real 系统。
+
+阶段验收顺序（前一项不达标，后一项不算）：
+
+1. MJCF 可加载
 2. 传感器读数合理
 3. 环境 API 稳定
 4. 训练脚本可跑通
 
-## 主线实现
+阶段切换以 PPO baseline 在当前 task 上**稳定可复现地收敛**为准。
 
-当前主线是 task-based API，不再以 legacy 单文件环境作为推荐入口。
+---
 
-- 包根入口：`tactile_grasp.make_env()`
-- 环境配置入口：`tactile_grasp.load_env_cfg()`
-- PPO 配置入口：`tactile_grasp.load_rl_cfg()`
-- 主线实现目录：`src/tactile_grasp/`
-- mdp 子包：`src/tactile_grasp/mdp/`（actions / observations / rewards / events / terminations）
+## 2. 永久硬约束（未来阶段也不解除）
 
-当前注册任务：`Mjlab-TactileGrasp-Robotiq2F85`（PTS spheres 触觉传感器单一实现，TouchSite 路径已删除）。
+每条都附 "why"，未来想动这些时先回到"为什么当初这样定"。
 
-## 动作与观测边界
+### 2.1 观测真值边界
 
-当前动作空间固定为一维连续 `Δu`，范围 `[-1, 1]`。
+**Policy observation 不能依赖 MuJoCo 内部接触真值。**
 
-- 语义：Robotiq 位置命令增量
-- 内部命令：`u in [0, 255]`
-- 当前不包含：`Franka` 机械臂控制、笛卡尔 `IK`、whole-arm `6DoF` 动作
+- Why：仿真才有的真值在实机没有；让 policy 依赖它等于把 sim2real gap 写死。
+- 真值可以用于 reward、termination、debug，不能进 policy 输入。
 
-如果未来做整臂抓取，那是后续阶段的新任务定义，不应混入当前 tactile gripper baseline。
+### 2.2 控制抽象
 
-观测与奖励边界：
+**保持 Robotiq 2F-85 的真实控制接口（位置命令 `u ∈ [0, 255]`），不引入理想 force actuator 替代。**
 
-- policy observation 不应依赖 MuJoCo 内部接触真值
-- MuJoCo 内部真值可以用于 reward、termination 和 debug
-- 当前触觉已拆 normal / tangential：site-local frame 法向分量（`site.Z`，9 维）与切向分量（`site.X/Y`，18 维）分别作为独立观测项
-- 当前 taxel 观测带 history buffer（taxel `history_length=5`，pad wrench `history_length=3`）
-- 当前未实现 slip proxy、`data.contact` 真值过滤、time-domain 频谱特征
+- Why：实机上用的就是这个接口；引入理想 actuator 会让 policy 学到无法迁移的力控行为。
 
-## 代码组织约束
+### 2.3 资源文件
 
-- `assets/`：MJCF、XML、贴图等仿真资源
-- `src/tactile_grasp/`：主线 task 配置、触觉、奖励、PPO 配置
-- `src/tactile_grasp/mdp/`：actions / observations / rewards / events / terminations 五块
-- `scripts/`：调试、可视化、smoke test、训练入口
-- `docs/source/`：用户文档、设计文档、API 文档
+**不覆盖 `assets/robotiq_2f85/2f85.xml` 等上游原始 XML。**
 
-修改时遵守这些约束：
+- Why：保留上游可追溯版本，方便升级和对照。
+- 触觉变体派生为独立文件，例如 `assets/robotiq_2f85/2f85_tactile.xml`、`2f85_pts_spheres.xml`。
 
-- 不要覆盖原始 `assets/robotiq_2f85/2f85.xml`
-- 触觉变体应派生为独立 XML，如 `2f85_tactile.xml`、`2f85_pts_spheres.xml`
-- 优先做可验证的小步改动，不做一次性大重构
-- 行为变更要同步更新设计文档，不要只改代码
+### 2.4 流程纪律
 
-## 运行方式
+**design 文档是路线，不是实现规范原样执行。**
 
-推荐使用 `uv`。
+- Why：design 描述目标，实现要根据当前阶段和已有代码重新判断。
+- **行为变更必须同步对应文档。** 不能只改代码不更新 design 或 usage 文档。
 
-安装：
+---
 
-- CPU：`uv sync --extra cpu --group dev`
-- CUDA 12.8：`uv sync --extra cu128 --group dev`
+## 3. 当前阶段范围边界（不在 scope）
 
-常用运行命令：
+下面这些**当前阶段不做**；要做时另起 task 或新阶段，不要扩当前 task。
 
-- 包加载检查：`uv run python main.py`
-- MJCF 编译检查：`uv run python scripts/check_mjcf.py`
-- 环境 smoke test：`uv run python scripts/smoke_env.py --steps 40`
-- Viewer：`uv run python scripts/view_env.py --device cpu`
-- 最小训练（mjlab 入口）：`WANDB_MODE=offline uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 --agent.max-iterations 2 --env.scene.num-envs 4 --env.episode-length-s 0.5 --gpu-ids None`
+- 整臂 / Franka / 笛卡尔 IK / 6DoF 控制
+- 同时维护多种触觉传感器变体（当前只 PTS spheres）
+- 完整 sim2real 部署（实时环、完整域随机化）
 
-## 必做验证
+---
 
-每次重要改动后，至少按影响范围完成下面这些检查：
+## 4. 阶段性约束（带解禁条件）
 
-### 改了 XML / MJCF
+和永久约束分开：未来满足条件后会解除。条件不满足前，agent 不要主动放开。
 
-- `uv run python scripts/check_mjcf.py`
-- 必要时补跑 `uv run python scripts/view_env.py --task-id ...`
+| 当前不做 | 解禁条件 |
+|---|---|
+| 动作扩成 `[Δu, Δforce_limit]` | 一维 `Δu` baseline 稳定收敛后讨论 |
+| pad 切多个碰撞 geom | 出现接触抖动且诊断证明是 geom 粒度问题 |
+| 当前 task 范围外的物体或抓取姿态 | 当前 task 验证可复现收敛后再扩 |
+| 引入新的传感器变体 | 现有 PTS spheres 实现稳定且确有对比需求 |
 
-### 改了观测 / 奖励 / 环境配置
+---
 
-- `uv run python scripts/smoke_env.py --steps 40`
-- 确认 observation shape、dtype、finite 状态合理
+## 5. 工作流契约
 
-### 改了训练相关代码
+这一块是 agent 最容易踩的部分。
 
-- `WANDB_MODE=offline uv run python scripts/train.py Mjlab-TactileGrasp-Robotiq2F85 --agent.max-iterations 2 --env.scene.num-envs 4 --env.episode-length-s 0.5 --gpu-ids None`
+### 5.1 工具链
 
-### 改了 Python 代码
+- **Python 依赖与运行一律走 `uv`。** 不直接调用系统 `python` / `pip` / `pytest`。
+- 安装：
+  - CPU：`uv sync --extra cpu --group dev`
+  - CUDA：`uv sync --extra <cuda-tag> --group dev`，`<cuda-tag>` 以 `pyproject.toml [project.optional-dependencies]` 当前提供的为准
+- 运行 Python 时若本机 `PYTHONPATH` 被 ROS 等污染，前缀清空：`PYTHONPATH= uv run python ...`。
 
-- `uv run ruff check .`
+### 5.2 Git / Commit
 
-### 改了文档
+- **不绕过 pre-commit hooks。** 不用 `--no-verify`、`--no-gpg-sign` 等。失败就修底层问题。
+- 钩子失败时**新建一次 commit** 修复，不要 `git commit --amend`（pre-commit 失败时 commit 没真正发生，amend 会改前一次提交）。
+- 每个独立改动一次 commit，便于 review 和回滚。
 
-- `uv run sphinx-build -b html docs/source docs/_build_docscheck`
+### 5.3 Docstring 与注释
 
-## 文档规范
+- 公开模块 / 类 / 函数写 docstring，遵循 **Google 中文风格**：节名（`Args` / `Returns` / `Raises` / `Attributes`）保持英文 Google 写法，内容可中文。
+- docstring 第一行结尾用**英文 `.`**，不用中文 `。`（`ruff D415` 会卡）。
+- 行内注释默认中文，简洁，只解释"为什么"或"非直观约束"，不重复代码字面含义。
 
-文档分工保持稳定：
-
-- `plan.md`：路线与原则
-- `docs/source/usage.rst`：怎么运行、怎么切 task、怎么训练
-- `docs/source/design/task_architecture.rst`：当前实现现状总览
-- `docs/source/design/*.rst`：各子系统专题说明
-- `docs/source/api/*.rst`：API 参考
-
-不要把临时方案文档、聊天结论或实验记录直接当成实现规范。
-
-## 注释与 Docstring 规范
-
-仓库统一采用“Google 中文风格”：
-
-- Python 的模块、类、公共函数优先写 docstring
-- docstring 结构遵循 Google 风格
-- docstring 内容说明可以用中文
-- `Args`、`Returns`、`Raises`、`Attributes` 等节名保持 Google 风格写法
-- 普通行内注释和块注释默认使用中文，要求简洁、只解释必要上下文
-- 注释应解释“为什么”或“不直观的实现约束”，不要重复代码字面含义
-
-推荐示例：
+示例：
 
 ```python
 def step(action: torch.Tensor) -> torch.Tensor:
-    """执行一步环境推进并返回奖励。
+    """执行一步环境推进并返回奖励.
 
     Args:
-        action: 策略输出的一步动作，范围为 ``[-1, 1]``。
+        action: 策略输出的一步动作，范围为 ``[-1, 1]``.
 
     Returns:
-        当前环境步对应的奖励张量。
+        当前环境步对应的奖励张量.
     """
 ```
 
-当前工具链约束如下：
+### 5.4 验证矩阵
 
-- `ruff` + `pydocstyle` 会检查 docstring 是否基本符合 Google 风格
-- 当前不会自动检查“注释文本是否为中文”
-- 因此“中文”部分靠仓库规范执行，“Google 结构”部分靠工具兜底
+按"改了什么"分类，至少跑对应这一格再开 PR。具体 task ID 和 smoke 命令以 `docs/source/usage.rst` 为准，不要照抄本文件。
 
-对应检查命令：
+| 你改了 | 至少跑 |
+|---|---|
+| `assets/**/*.xml` 或 MJCF | `uv run python scripts/check_mjcf.py`；必要时 `uv run python scripts/view_env.py` |
+| `src/tactile_grasp/mdp/**` | `uv run python scripts/smoke_env.py --steps 40` + `uv run pytest tests/` |
+| `src/tactile_grasp/env_cfgs.py` / `robot_cfg.py` | smoke_env 同上 + `uv run pytest tests/` |
+| `src/tactile_grasp/rl_cfg.py` | `uv run pytest tests/test_rl_cfg.py` + 一个 2-iter 训练 smoke |
+| `scripts/train.py` / `scripts/play.py` | `WANDB_MODE=offline uv run python scripts/train.py <task-id> --agent.max-iterations 2 --env.scene.num-envs 4 --env.episode-length-s 0.5 --gpu-ids None` |
+| 其它 `.py` | `uv run ruff check .` + `uv run pytest tests/` |
+| `pyproject.toml` 或依赖 | `uv lock --check` 后跑对应 extra 的 `uv sync` |
+| `docs/source/**` | `uv run sphinx-build -b html docs/source docs/_build_docscheck` |
+| `AGENTS.md` | 检查范围边界与代码现状一致 |
 
-- `uv run ruff check .`
+---
 
-## 不要做的事
+## 6. 信息源指针
 
-- 不要引入理想 force actuator 替代原始 2F-85 控制抽象
-- 不要过早把 pad 切成多个碰撞 geom
-- 不要在第一阶段把动作扩成 `[Δu, Δforce_limit]`
-- 不要把当前夹爪任务直接改成 whole-arm `6DoF` 控制
-- 不要把研究方案文档当成实现规范原样执行
-- 不要改了行为却不更新对应文档和验证脚本
+只列"去哪里看当前状态"，不在本文件里复制状态本身。
+
+| 想知道什么 | 看哪里 |
+|---|---|
+| 当前注册了哪些 task | `uv run python -c "from tactile_grasp import list_tasks; print(list_tasks())"` 或 `docs/source/design/task_architecture.rst` |
+| 当前观测维度、history 长度、taxel 布局 | `src/tactile_grasp/env_cfgs.py` + `docs/source/design/tactile_pipeline.rst` |
+| 当前 PPO 超参 | `src/tactile_grasp/rl_cfg.py` |
+| 当前依赖版本、CUDA tag | `pyproject.toml` + `docs/source/install.rst` |
+| 历史决策 | git log + PR description |
+
+---
+
+## 7. 代码组织约定
+
+固定的目录责任划分（**大重构时可调，小改不应破坏**）：
+
+- `assets/`：MJCF / XML / 贴图等仿真资源（变体派生，不覆盖原始）
+- `src/tactile_grasp/`：包入口、env / robot / rl 配置
+- `src/tactile_grasp/mdp/`：actions / observations / rewards / events / terminations 五块
+- `scripts/`：调试、可视化、smoke、训练入口
+- `tests/`：pytest 测试
+- `docs/source/`：用户文档（`usage.rst` / `install.rst`）+ 设计文档（`design/`）+ API（`api/`）
+
+包根（`src/tactile_grasp/__init__.py`）重导出：`make_env` / `load_env_cfg` / `load_rl_cfg` / `load_runner_cls` / `list_tasks` / `register_mjlab_task` / `TASK_ID`。
+
+---
+
+## 8. 元数据
+
+- 本文件 last review：2026-05-23（task-based API 重构完成）
+- 与上游耦合点（升级时这里要检查）：
+  - mjlab task registry API：`register_mjlab_task` / `load_env_cfg`
+  - `TransmissionType` enum 位置（`mjlab.entity.entity`）
+  - `scripts/train.py` 使用的 tyro CLI 子命令风格
