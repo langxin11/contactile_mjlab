@@ -108,7 +108,10 @@ def lift_delta(env: "ManagerBasedRlEnv") -> torch.Tensor:
     """Reward positive object lift relative to cached reset height."""
     init_z = getattr(env, "_tactile_active_object_init_z", None)
     if init_z is None:
-        init_z = torch.zeros(env.num_envs, device=env.device, dtype=torch.float32)
+        raise RuntimeError(
+            "lift_delta() requires '_tactile_active_object_init_z' to be initialized. "
+            "Call the reset event before requesting lift reward terms."
+        )
     current_z = obs.active_object_position(env)[:, 2]
     return torch.relu(current_z - init_z)
 

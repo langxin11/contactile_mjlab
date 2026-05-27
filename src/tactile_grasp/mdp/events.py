@@ -24,6 +24,8 @@ def pick_lift_curriculum(
     del env_ids
     if force_stage is not None:
         stage = int(force_stage)
+        if stage not in (0, 1, 2):
+            raise ValueError(f"force_stage must be one of {{0, 1, 2}}, got {force_stage!r}.")
     elif env.common_step_counter < 20_000:
         stage = 0
     elif env.common_step_counter < 80_000:

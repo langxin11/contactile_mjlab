@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from tactile_grasp.mdp import observations, rewards
+from tactile_grasp.mdp import events, observations, rewards
 
 
 class _FakeActionManager:
@@ -236,6 +236,26 @@ def test_lift_delta_is_zero_at_table_height_and_positive_when_raised() -> None:
     out = rewards.lift_delta(env)
 
     assert torch.allclose(out, torch.tensor([0.0, 0.018], dtype=torch.float32))
+
+
+def test_lift_delta_requires_reset_height_cache() -> None:
+    """lift_delta should fail fast when reset-time initial height was never cached."""
+    env = _FakeEnv(num_envs=1)
+    env._tactile_active_object_ids = torch.zeros(1, dtype=torch.long)
+    env.scene["cube_24mm"] = SimpleNamespace(
+        data=SimpleNamespace(root_link_pos_w=torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32))
+    )
+
+    with pytest.raises(RuntimeError, match="_tactile_active_object_init_z"):
+        rewards.lift_delta(env)
+
+
+def test_pick_lift_curriculum_rejects_invalid_forced_stage() -> None:
+    """Forced curriculum stage should be validated instead of silently falling through."""
+    env = SimpleNamespace(common_step_counter=0)
+
+    with pytest.raises(ValueError, match="force_stage"):
+        events.pick_lift_curriculum(env, env_ids=None, force_stage=3)
 
 
 def test_action_smoothness_l1_uses_current_minus_previous_action() -> None:
