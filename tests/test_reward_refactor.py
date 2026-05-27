@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
+from tactile_grasp import load_env_cfg
 from tactile_grasp.mdp import events, observations, rewards
 
 
@@ -236,6 +237,41 @@ def test_lift_delta_is_zero_at_table_height_and_positive_when_raised() -> None:
     out = rewards.lift_delta(env)
 
     assert torch.allclose(out, torch.tensor([0.0, 0.018], dtype=torch.float32))
+
+
+def test_pick_lift_cfg_uses_new_reward_term_names() -> None:
+    """Registered env cfg should expose the staged reward composition names."""
+    cfg = load_env_cfg(play=False)
+
+    reward_terms = cfg.rewards
+
+    for name in (
+        "reach3d",
+        "align",
+        "contact",
+        "coverage",
+        "lift_delta",
+        "hold",
+        "floor_collision",
+        "action_smoothness",
+        "close_command",
+        "drop_penalty",
+    ):
+        assert name in reward_terms, name
+
+    for name in ("alive", "reach_xy", "lift_height", "tactile_force"):
+        assert name not in reward_terms, name
+
+
+def test_pick_lift_cfg_scales_tactile_observations_by_sensor_range() -> None:
+    """Registered env cfg should normalize tactile observations by sensor limits."""
+    cfg = load_env_cfg(play=False)
+    actor_terms = cfg.observations["actor"].terms
+
+    assert actor_terms["left_taxel_normal"].scale == pytest.approx(1.0 / 15.0)
+    assert actor_terms["right_taxel_normal"].scale == pytest.approx(1.0 / 15.0)
+    assert actor_terms["left_taxel_tangential"].scale == pytest.approx(1.0 / 4.0)
+    assert actor_terms["right_taxel_tangential"].scale == pytest.approx(1.0 / 4.0)
 
 
 def test_lift_delta_requires_reset_height_cache() -> None:

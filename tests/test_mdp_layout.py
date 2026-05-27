@@ -26,10 +26,21 @@ def test_observations_exports():
 
 
 def test_rewards_exports():
-    """Rewards module must expose the four reward callables."""
+    """Rewards module must expose the current staged reward callables."""
     from tactile_grasp.mdp import rewards
 
-    for name in ("alive", "action_l2", "close_command_l2", "tactile_force_l2"):
+    for name in (
+        "reach3d",
+        "align_xy",
+        "tactile_contact_binary",
+        "taxel_coverage",
+        "lift_delta",
+        "hold_bonus",
+        "action_smoothness_l1",
+        "close_command_l2",
+        "robot_floor_collision",
+        "drop_penalty",
+    ):
         assert callable(getattr(rewards, name)), name
 
 

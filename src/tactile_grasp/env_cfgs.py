@@ -37,8 +37,8 @@ PLAY_EPISODE_LENGTH_S = 6.0
 
 DELTA_U_MAX = 3.0
 
-NORMAL_FORCE_SCALE = 5.0
-TANGENTIAL_FORCE_SCALE = 2.0
+NORMAL_FORCE_SCALE = 15.0
+TANGENTIAL_FORCE_SCALE = 4.0
 FORCE_SCALE = 20.0
 TORQUE_SCALE = 2.0
 
@@ -55,13 +55,20 @@ DROP_HEIGHT = 0.002
 SUCCESS_HEIGHT = 0.08
 SUCCESS_HOLD_STEPS = 25
 
-W_ALIVE = 1.0
-W_REACH_XY = -2.0
-W_LIFT_HEIGHT = 8.0
-W_TOUCH = 1.0
-W_TACTILE_FORCE = -0.01
-W_ACTION_RATE = -0.001
-W_CLOSE_COMMAND = -0.001
+TACTILE_CONTACT_THRESHOLD = 0.05
+REACH_K_POS = 10.0
+ALIGN_K_XY = 20.0
+HOLD_LIFT_THRESHOLD = 0.03
+
+W_REACH = 0.6
+W_ALIGN = 0.8
+W_CONTACT = 0.2
+W_COVERAGE = 1.2
+W_LIFT_DELTA = 8.0
+W_HOLD = 2.0
+W_FLOOR = -12.0
+W_ACTION_SMOOTHNESS = -0.01
+W_CLOSE_COMMAND = -0.05
 W_DROP_PENALTY = -5.0
 
 
@@ -171,27 +178,53 @@ def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
             )
         },
         rewards={
-            "alive": RewardTermCfg(func=rewards.alive, weight=W_ALIVE),
-            "reach_xy": RewardTermCfg(func=rewards.reach_xy, weight=W_REACH_XY),
-            "lift_height": RewardTermCfg(func=rewards.lift_height, weight=W_LIFT_HEIGHT),
-            "touch": RewardTermCfg(
-                func=rewards.tactile_contact,
-                weight=W_TOUCH,
+            "reach3d": RewardTermCfg(
+                func=rewards.reach3d,
+                weight=W_REACH,
+                params={"k_pos": REACH_K_POS},
+            ),
+            "align": RewardTermCfg(
+                func=rewards.align_xy,
+                weight=W_ALIGN,
+                params={"k_xy": ALIGN_K_XY},
+            ),
+            "contact": RewardTermCfg(
+                func=rewards.tactile_contact_binary,
+                weight=W_CONTACT,
                 params={
                     "left_sensor_names": LEFT_TAXEL_FORCE_SENSOR_NAMES,
                     "right_sensor_names": RIGHT_TAXEL_FORCE_SENSOR_NAMES,
-                    "threshold": TACTILE_ACTIVITY_THRESHOLD,
+                    "threshold": TACTILE_CONTACT_THRESHOLD,
                 },
             ),
-            "tactile_force": RewardTermCfg(
-                func=rewards.tactile_force_l2,
-                weight=W_TACTILE_FORCE,
+            "coverage": RewardTermCfg(
+                func=rewards.taxel_coverage,
+                weight=W_COVERAGE,
                 params={
                     "left_sensor_names": LEFT_TAXEL_FORCE_SENSOR_NAMES,
                     "right_sensor_names": RIGHT_TAXEL_FORCE_SENSOR_NAMES,
+                    "threshold": TACTILE_CONTACT_THRESHOLD,
                 },
             ),
-            "action_rate": RewardTermCfg(func=rewards.action_l2, weight=W_ACTION_RATE),
+            "lift_delta": RewardTermCfg(func=rewards.lift_delta, weight=W_LIFT_DELTA),
+            "hold": RewardTermCfg(
+                func=rewards.hold_bonus,
+                weight=W_HOLD,
+                params={
+                    "left_sensor_names": LEFT_TAXEL_FORCE_SENSOR_NAMES,
+                    "right_sensor_names": RIGHT_TAXEL_FORCE_SENSOR_NAMES,
+                    "threshold": TACTILE_CONTACT_THRESHOLD,
+                    "lift_threshold": HOLD_LIFT_THRESHOLD,
+                },
+            ),
+            "floor_collision": RewardTermCfg(
+                func=rewards.robot_floor_collision,
+                weight=W_FLOOR,
+            ),
+            "action_smoothness": RewardTermCfg(
+                func=rewards.action_smoothness_l1,
+                weight=W_ACTION_SMOOTHNESS,
+            ),
             "close_command": RewardTermCfg(
                 func=rewards.close_command_l2,
                 weight=W_CLOSE_COMMAND,
