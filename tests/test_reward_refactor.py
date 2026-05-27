@@ -481,3 +481,23 @@ def test_robot_floor_collision_initializes_cached_geom_ids_from_scene_when_missi
     assert torch.equal(out, torch.tensor([1.0], dtype=torch.float32))
     assert torch.equal(env._tactile_robot_geom_ids, torch.tensor([7, 8], dtype=torch.long))
     assert int(env._tactile_floor_geom_id) == 99
+
+
+def test_robot_floor_collision_raises_clear_error_when_terrain_missing() -> None:
+    """robot_floor_collision should raise a clear error when the terrain entry is absent."""
+    env = _FakeEnv(num_envs=1)
+    env.scene["robot"] = SimpleNamespace(
+        indexing=SimpleNamespace(geom_ids=torch.tensor([7, 8], dtype=torch.long))
+    )
+    env.sim = SimpleNamespace(
+        data=SimpleNamespace(
+            nacon=torch.tensor([0], dtype=torch.int32),
+            contact=SimpleNamespace(
+                geom=torch.zeros((0, 2), dtype=torch.int32),
+                worldid=torch.zeros((0,), dtype=torch.int32),
+            ),
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="terrain geom ids"):
+        rewards.robot_floor_collision(env)
