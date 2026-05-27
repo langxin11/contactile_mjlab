@@ -8,12 +8,9 @@
 ----------
 
 奖励项都在 ``env_cfgs.make_tactile_grasp_env_cfg`` 中配置，定义在
-``tactile_grasp.mdp.rewards``。核心思路：
-
-- 用 ``reach_xy`` 引导夹爪对准 active object
-- 用 ``touch`` 与 ``lift_height`` 引导抓住并抬起
-- 用轻量惩罚限制过大触觉力、过激动作和多余闭合
-- 用 ``drop_penalty`` 明确区分失败
+``tactile_grasp.mdp.rewards``。当前是分阶段 shaping 组合，目标是让策略经过
+"对准 → 下探 → 轻触 → 多点接触 → 闭合抬升 → 稳定悬停" 的链路，而不是悬停少动作。
+每一项都是有界的：正向项用 ``exp(-k·d)`` 或 ``0/1`` 二值，负向项直接用负权重。
 
 .. list-table::
    :header-rows: 1
@@ -22,33 +19,44 @@
    * - 奖励项
      - 权重
      - 当前作用
-   * - ``alive``
-     - +1.0
-     - 鼓励 episode 持续进行
-   * - ``reach_xy``
-     - -2.0
-     - 惩罚 active object 与夹爪根位置的水平距离
-   * - ``lift_height``
+   * - ``reach3d``
+     - +0.6
+     - ``exp(-k_pos·‖p_obj − p_tool‖)``，``k_pos = 10``，引导 3D 接近
+   * - ``align``
+     - +0.8
+     - ``exp(-k_xy·‖Δxy‖)``，``k_xy = 20``，鼓励先对准 XY 再下探
+   * - ``contact``
+     - +0.2
+     - 任一 taxel force 范数超过 ``0.05 N`` 即得 1，弱信号防止悬停
+   * - ``coverage``
+     - +1.2
+     - 双指各 3×3 taxel 中激活数比例（左右平均，单边截断到 9）
+   * - ``lift_delta``
      - +8.0
-     - 鼓励 active object root height 升高
-   * - ``touch``
-     - +1.0
-     - 触觉总信号超过阈值时给接触奖励
-   * - ``tactile_force``
+     - ``relu(z_obj − z_obj_init)``；reset 时缓存 ``_tactile_active_object_init_z``
+   * - ``hold``
+     - +2.0
+     - 满足 ``lift_delta > 0.03`` 且双指都有 taxel 接触时给 1
+   * - ``floor_collision``
+     - -12.0
+     - 机器人 geom 与 plane terrain geom 接触时给 1（penalty，不终止）
+   * - ``action_smoothness``
      - -0.01
-     - 惩罚双指尖 taxel force 平方和（54 维原始 sensor）
-   * - ``action_rate``
-     - -0.001
-     - 惩罚 raw action 平方
+     - ``Σ|a_t − a_{t-1}|``，惩罚抖动
    * - ``close_command``
-     - -0.001
-     - 惩罚过大的闭合命令 ``(u/255)^2``
+     - -0.05
+     - ``(u / 255)^2``，惩罚多余的闭合命令
    * - ``drop_penalty``
      - -5.0
      - ``object_drop`` 终止时施加 -5
 
-``tactile_force_l2`` 是对原始 sensor 读数计算的，不依赖 normal / tangential
-拆分后的观测项 —— 它直接对左右指各 9 个三维 force sensor 的全部 54 维做平方和。
+触觉观测在进入 actor/critic 前会被裁剪到 sensor 物理量程：
+
+- 切向力 ``site.X / site.Y`` 裁剪到 ``[-4, 4] N``
+- 法向力 ``site.Z`` 裁剪到 ``[-15, 15] N``
+
+观测项 scale 取量程倒数（``1/4`` 和 ``1/15``），裁剪后归一化值大致落在
+``[-1, 1]``，避免极少数高力 sample 把 normalization 拉偏。
 
 终止条件
 --------
@@ -99,27 +107,23 @@
 阈值 ``minimum_tactile_signal = 1.0e-3`` 是为了过滤 welded taxel force sensor
 在无接触时的静态噪声 —— 不是语义判断。
 
-为什么当前 reward 保持极简
----------------------------
+为什么这样组合 reward
+---------------------
 
-实现优先级仍然是：
+这一版 reward 把 "对准 / 接触 / 抬升 / 稳定" 拆成阶梯式 shaping：
 
-1. 先确认 MJCF / 传感器 / reset-step 链路稳定
-2. 再确认策略能在最小奖励集下启动训练
-3. 最后再逐步加更细的接触质量指标
+1. ``reach3d`` 与 ``align`` 先把夹爪带到物体上方并 XY 对齐
+2. ``contact`` 与 ``coverage`` 鼓励真正轻触并覆盖多 taxel，而不是悬停
+3. ``lift_delta`` 与 ``hold`` 鼓励抬起且要双指都还在接触，避免抛物
+4. ``floor_collision`` / ``action_smoothness`` / ``close_command`` / ``drop_penalty``
+   惩罚明显错误（撞地、抖动、空闭合、掉物），但都不直接终止 episode
 
-因此当前 reward 是“top-down pick-lift 起步版”，不是完整 pick-and-place 或
-释放到目标区的最终奖励。
+仍属于后续增强：
 
-后续预留项
-----------
-
-以下项仍属于后续增强：
-
-- 目标夹持力 / 力平衡奖励
+- 目标夹持力 / 力平衡 reward
 - place target / release reward
 - slip proxy / 滑移惩罚
-- 依赖触觉历史 buffer 的时序奖励（history 已经有了，shape 是 ready 的，
+- 依赖触觉历史 buffer 的时序 reward（history 已经有了，shape 是 ready 的，
   只是当前 reward 函数没有用 history slice）
 
 相关页面

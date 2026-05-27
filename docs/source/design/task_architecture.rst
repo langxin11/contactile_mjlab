@@ -57,7 +57,7 @@ slide/hinge base joints。
        ├── actions.py       # CartesianMocapAction(Cfg) + RobotiqCommandAction(Cfg)
        ├── actuators.py     # RobotiqGeneralActuator(Cfg) —— XML actuator 包装
        ├── observations.py  # tactile split、pad wrench、vision_proxy、gripper_command
-       ├── rewards.py       # reach / lift / touch / force / action penalties
+       ├── rewards.py       # reach3d / align / contact / coverage / lift / hold / penalties
        ├── terminations.py  # object_height_below / stable_grasp_hold / workspace
        └── events.py        # pick-lift reset randomization + curriculum
 
@@ -195,20 +195,22 @@ object 相对夹爪的 ``dx/dy/dz``、相对 yaw 的 ``sin/cos``，以及
 奖励 / 终止
 -----------
 
-奖励项（来自 ``mdp/rewards.py``）：
+奖励项（来自 ``mdp/rewards.py``，详见 :doc:`reward_design`）：
 
-==================== ======= =====================================
-奖励项                权重    作用
-==================== ======= =====================================
-``alive``             +1.0   未终止时给 +1
-``reach_xy``          -2.0   惩罚夹爪与 active object 的水平距离
-``lift_height``       +8.0   鼓励 active object 被抬高
-``touch``             +1.0   触觉信号超过阈值时给接触奖励
-``tactile_force``     -0.01  双指总 taxel force 平方和
-``action_rate``       -0.001 raw action 平方
-``close_command``     -0.001 归一化命令 ``(u/255)^2``
-``drop_penalty``      -5.0   object_drop 触发时 -5
-==================== ======= =====================================
+============================== ======= =====================================
+奖励项                          权重    作用
+============================== ======= =====================================
+``reach3d``                     +0.6    ``exp(-k_pos·‖p_obj − p_tool‖)``
+``align``                       +0.8    ``exp(-k_xy·‖Δxy‖)``
+``contact``                     +0.2    任一 taxel force 范数超 ``0.05 N`` 给 1
+``coverage``                    +1.2    双指 3×3 taxel 激活比例平均
+``lift_delta``                  +8.0    ``relu(z_obj − z_obj_init)``
+``hold``                        +2.0    抬高且双指均接触时给 1
+``floor_collision``             -12.0   机器人 geom 撞地 plane 给 1
+``action_smoothness``           -0.01   ``Σ|a_t − a_{t-1}|``
+``close_command``               -0.05   归一化命令 ``(u/255)^2``
+``drop_penalty``                -5.0    object_drop 触发时 -5
+============================== ======= =====================================
 
 终止项（来自 ``mdp/terminations.py`` 与 ``mjlab.envs.mdp.time_out``）：
 
