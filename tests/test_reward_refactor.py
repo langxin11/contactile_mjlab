@@ -537,3 +537,72 @@ def test_robot_floor_collision_raises_clear_error_when_terrain_missing() -> None
 
     with pytest.raises(RuntimeError, match="terrain geom ids"):
         rewards.robot_floor_collision(env)
+
+
+def test_close_near_object_is_command_value_at_zero_distance() -> None:
+    """close_near_object 在物体重合时退化为归一化命令本身."""
+    env = _FakeEnv(num_envs=1)
+    env.action_manager = SimpleNamespace(
+        get_term=lambda name: SimpleNamespace(command=torch.tensor([[255.0]], dtype=torch.float32))
+    )
+    original_obj = observations.active_object_position
+    original_tool = observations.tool_position
+    try:
+        observations.active_object_position = lambda _env: torch.tensor(
+            [[0.0, 0.0, 0.02]], dtype=torch.float32
+        )
+        observations.tool_position = lambda _env: torch.tensor(
+            [[0.0, 0.0, 0.02]], dtype=torch.float32
+        )
+        out = rewards.close_near_object(env, k_d=30.0)
+    finally:
+        observations.active_object_position = original_obj
+        observations.tool_position = original_tool
+
+    assert torch.allclose(out, torch.tensor([1.0], dtype=torch.float32))
+
+
+def test_close_near_object_decays_to_near_zero_when_far() -> None:
+    """close_near_object 应在远离物体时迅速衰减到接近 0."""
+    env = _FakeEnv(num_envs=1)
+    env.action_manager = SimpleNamespace(
+        get_term=lambda name: SimpleNamespace(command=torch.tensor([[255.0]], dtype=torch.float32))
+    )
+    original_obj = observations.active_object_position
+    original_tool = observations.tool_position
+    try:
+        observations.active_object_position = lambda _env: torch.tensor(
+            [[0.0, 0.0, 0.02]], dtype=torch.float32
+        )
+        observations.tool_position = lambda _env: torch.tensor(
+            [[0.10, 0.0, 0.02]], dtype=torch.float32
+        )
+        out = rewards.close_near_object(env, k_d=30.0)
+    finally:
+        observations.active_object_position = original_obj
+        observations.tool_position = original_tool
+
+    assert out.item() < 0.06
+
+
+def test_close_near_object_is_zero_when_command_is_zero() -> None:
+    """命令为 0（夹爪全张开）时不应得到任何 close 奖励."""
+    env = _FakeEnv(num_envs=1)
+    env.action_manager = SimpleNamespace(
+        get_term=lambda name: SimpleNamespace(command=torch.tensor([[0.0]], dtype=torch.float32))
+    )
+    original_obj = observations.active_object_position
+    original_tool = observations.tool_position
+    try:
+        observations.active_object_position = lambda _env: torch.tensor(
+            [[0.0, 0.0, 0.02]], dtype=torch.float32
+        )
+        observations.tool_position = lambda _env: torch.tensor(
+            [[0.0, 0.0, 0.02]], dtype=torch.float32
+        )
+        out = rewards.close_near_object(env, k_d=30.0)
+    finally:
+        observations.active_object_position = original_obj
+        observations.tool_position = original_tool
+
+    assert torch.allclose(out, torch.tensor([0.0], dtype=torch.float32))
