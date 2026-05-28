@@ -134,11 +134,11 @@ Reward magnitude across phases (final reward = `W_STAGED_PICKUP · staged_pickup
 |------------------------------------|-------|-------|---------|------|---------|--------|
 | Initial (far)                      | 0.30  | 0     | 0       | 0    | 0.30    | 0.90   |
 | Aligned + half-closed, hovering    | 0.70  | 0.14  | 0       | 0    | 0.80    | 2.40   |
-| First contact (4/9 taxels active)  | 0.95  | 0.70  | 0.44    | 0    | 1.94    | 5.83   |
-| Lifted to 4 cm                     | 0.95  | 0.90  | 0.90    | 0.50 | 2.80    | 8.40   |
+| First contact (4/9 taxels active)  | 0.95  | 0.70  | 0.44    | 0    | 1.91    | 5.72   |
+| Lifted to 4 cm                     | 0.95  | 0.90  | 0.90    | 0.50 | 2.96    | 8.88   |
 | Saturated (lifted to ≥ 8 cm)       | 1.00  | 1.00  | 1.00    | 1.00 | 4.00    | 12.00  |
 
-The "hover and farm" baseline (2.40) is now strictly dominated by "descend to contact" (5.83)
+The "hover and farm" baseline (2.40) is now strictly dominated by "descend to contact" (5.72)
 — ~2.4× difference per step — so the policy has a strong gradient to push through the
 contact phase.
 
