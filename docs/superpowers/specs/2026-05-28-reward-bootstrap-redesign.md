@@ -99,6 +99,42 @@ W_CLOSE_NEAR = 0.8
   toward `u = 0` that the policy already learned, but smaller than `W_LIFT_DELTA` so it does
   not dominate the actual task objective.
 
+**How `k_d = 30.0` was chosen (rationale, not measurement):**
+
+*Geometric anchor — why ~3 cm is the meaningful scale.* Robotiq 2F-85 fully-open width is
+85 mm, so each pad sits ~42 mm from the gripper center. The tabletop objects have a maximum
+lateral half-extent of ~12 mm (cube 24 mm, cylinder 24 mm). When the tool center (= midpoint
+of the two pad sites) is within ~3 cm laterally of the object center, the closing trajectory
+still has a chance to sweep a pad across the object. Past ~5 cm, even a full close cannot
+reach the object — closing in that region is wasted command. So 3 cm is roughly the boundary
+of "closing is geometrically meaningful," and we want the reward to be active inside that
+boundary, decaying fast outside it.
+
+*Why `k_d` must be sharper than `reach3d` / `align`.* If `close_near_object` had the same
+decay rate as `reach3d` (`k_pos = 10`), it would just duplicate the reach signal and add no
+new bootstrap information. Forcing `k_d > k_pos, k_xy` makes the close-incentive fire only
+*after* the gripper has actually descended near the object, which is the conjunction we want
+the policy to discover.
+
+| Distance | `reach3d` (k=10) | `align_xy` (k=20) | `close_near_object` (k=30) |
+|----------|------------------|-------------------|-----------------------------|
+| 1 cm     | 0.90             | 0.82              | 0.74                        |
+| 3 cm     | 0.74             | 0.55              | **0.41**                    |
+| 5 cm     | 0.61             | 0.37              | 0.22                        |
+| 10 cm    | 0.37             | 0.14              | 0.05                        |
+
+*Honest uncertainty.* The 3 cm anchor uses nominal 2F-85 dimensions, not measurements from
+the MJCF (pad thickness, exact closing stroke). A precise measurement might justify `k_d`
+anywhere in `[20, 40]`; `30` is a defensible starting point, not a swept optimum. Also note
+that `d = 0` means tool-center is at object-center (i.e., centered above), *not* that pads
+are touching — the term is a soft gravitational pull on alignment, not a contact gate.
+
+*Tuning guidance after training.* If `close_near_object` curves stay near zero, the policy
+never approaches close enough; lower `k_d` (e.g., 20) to extend the effective radius. If
+`close_near_object` saturates quickly but `contact` / `lift_delta` do not follow, the term is
+rewarding "loitering above the object with `u = 255`"; raise `k_d` (e.g., 40) to make it
+more selective.
+
 ### Change 2 — lower `TACTILE_CONTACT_THRESHOLD`
 
 ```python
