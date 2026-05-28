@@ -259,10 +259,12 @@ def staged_pickup(
     Returns ``reach * (1 + close * (1 + contact * (1 + lift)))`` with all
     factors in ``[0, 1]``; output is in ``[0, 4]``.
 
-    The reach factor uses an anisotropic distance with xy weighted twice as
-    heavily as z, so xy alignment dominates over z proximity at equal raw
-    distance.
+    The reach factor uses an anisotropic distance ``sqrt(2·(Δx² + Δy²) + Δz²)`` where
+    Δx² and Δy² are weighted 2× relative to Δz²; equivalently, a fixed xy offset
+    shrinks ``reach`` faster than the same offset along z.
     """
+    if lift_cap <= 0.0:
+        raise ValueError(f"lift_cap must be positive, got {lift_cap!r}.")
     delta = obs.active_object_position(env) - obs.tool_position(env)
     d_aniso = torch.sqrt(2.0 * (delta[:, 0] ** 2 + delta[:, 1] ** 2) + delta[:, 2] ** 2)
     reach = torch.exp(-k_pos * d_aniso)

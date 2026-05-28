@@ -796,3 +796,71 @@ def test_staged_pickup_lift_saturates_at_cap() -> None:
     assert torch.allclose(torch.tensor(at_cap), torch.tensor(beyond_cap), atol=1e-5), (
         f"cascade should saturate at lift_cap (at_cap={at_cap}, beyond_cap={beyond_cap})"
     )
+
+
+def test_staged_pickup_rejects_non_positive_lift_cap() -> None:
+    """staged_pickup should reject lift_cap <= 0 with a clear error."""
+    env = _FakeEnv(num_envs=1)
+    with _staged_pickup_deps(
+        obj_pos=torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32),
+        tool_pos=torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32),
+        command=torch.tensor([[1.0]], dtype=torch.float32),
+        coverage=torch.tensor([1.0], dtype=torch.float32),
+        lift=torch.tensor([0.0], dtype=torch.float32),
+    ):
+        with pytest.raises(ValueError, match="lift_cap"):
+            rewards.staged_pickup(
+                env,
+                k_pos=10.0,
+                k_d=30.0,
+                lift_cap=0.0,
+                left_sensor_names=("left_taxel_force_00",),
+                right_sensor_names=("right_taxel_force_00",),
+                threshold=0.005,
+            )
+
+
+def test_staged_pickup_anisotropic_distance_ratio_is_sqrt_two() -> None:
+    """The xy-vs-z anisotropy ratio in d_aniso should be sqrt(2)."""
+    env = _FakeEnv(num_envs=1)
+    obj = torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32)
+    command = torch.tensor([[0.0]], dtype=torch.float32)
+    coverage = torch.tensor([0.0], dtype=torch.float32)
+    lift = torch.tensor([0.0], dtype=torch.float32)
+
+    kwargs = dict(
+        k_pos=10.0,
+        k_d=30.0,
+        lift_cap=0.08,
+        left_sensor_names=("left_taxel_force_00",),
+        right_sensor_names=("right_taxel_force_00",),
+        threshold=0.005,
+    )
+
+    # An xy offset of d gives d_aniso = sqrt(2)·d
+    # A z offset of sqrt(2)·d gives d_aniso = sqrt(2)·d (same)
+    # So cascade(xy=d) should equal cascade(z=sqrt(2)·d) up to fp tolerance.
+    d = 0.02
+    import math
+
+    with _staged_pickup_deps(
+        obj,
+        torch.tensor([[d, 0.0, 0.02]], dtype=torch.float32),
+        command,
+        coverage,
+        lift,
+    ):
+        xy_offset = rewards.staged_pickup(env, **kwargs).item()
+    with _staged_pickup_deps(
+        obj,
+        torch.tensor([[0.0, 0.0, 0.02 + math.sqrt(2.0) * d]], dtype=torch.float32),
+        command,
+        coverage,
+        lift,
+    ):
+        z_offset_equivalent = rewards.staged_pickup(env, **kwargs).item()
+
+    assert math.isclose(xy_offset, z_offset_equivalent, rel_tol=1e-5), (
+        f"xy offset {d} should equal z offset sqrt(2)*{d} in cascade output "
+        f"(xy={xy_offset}, z_equiv={z_offset_equivalent})"
+    )
