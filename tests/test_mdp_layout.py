@@ -30,14 +30,11 @@ def test_rewards_exports():
     from tactile_grasp.mdp import rewards
 
     for name in (
-        "reach3d",
-        "align_xy",
-        "tactile_contact_binary",
+        "staged_pickup",
         "taxel_coverage",
         "lift_delta",
         "hold_bonus",
         "action_smoothness_l1",
-        "close_near_object",
         "robot_floor_collision",
         "drop_penalty",
     ):

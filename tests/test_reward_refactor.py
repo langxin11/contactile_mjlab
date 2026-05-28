@@ -240,27 +240,34 @@ def test_lift_delta_is_zero_at_table_height_and_positive_when_raised() -> None:
     assert torch.allclose(out, torch.tensor([0.0, 0.018], dtype=torch.float32))
 
 
-def test_pick_lift_cfg_uses_new_reward_term_names() -> None:
-    """Registered env cfg 应使用新的奖励项命名（含 close_near_object）."""
+def test_pick_lift_cfg_uses_multiplicative_gating_reward_terms() -> None:
+    """Registered env cfg 使用单一 staged_pickup 级联项替代旧加法 bootstrap 链."""
     cfg = load_env_cfg(play=False)
 
     reward_terms = cfg.rewards
 
     for name in (
+        "staged_pickup",
+        "hold",
+        "floor_collision",
+        "action_smoothness",
+        "drop_penalty",
+    ):
+        assert name in reward_terms, name
+
+    for name in (
+        "alive",
+        "reach_xy",
+        "lift_height",
+        "tactile_force",
+        "close_command",
         "reach3d",
         "align",
         "contact",
         "coverage",
         "lift_delta",
-        "hold",
-        "floor_collision",
-        "action_smoothness",
         "close_near_object",
-        "drop_penalty",
     ):
-        assert name in reward_terms, name
-
-    for name in ("alive", "reach_xy", "lift_height", "tactile_force", "close_command"):
         assert name not in reward_terms, name
 
 
@@ -310,80 +317,6 @@ def test_action_smoothness_l1_uses_current_minus_previous_action() -> None:
     out = rewards.action_smoothness_l1(env)
 
     assert torch.allclose(out, torch.tensor([1.0, 1.75], dtype=torch.float32))
-
-
-def test_reach3d_uses_tool_to_object_distance() -> None:
-    """reach3d should decay with tool-object distance and equal 1 at zero distance."""
-    env = _FakeEnv(num_envs=1)
-    original_obj = observations.active_object_position
-    original_tool = observations.tool_position
-    try:
-        observations.active_object_position = lambda _env: torch.tensor(
-            [[0.0, 0.0, 0.02]], dtype=torch.float32
-        )
-        observations.tool_position = lambda _env: torch.tensor(
-            [[0.0, 0.0, 0.02]], dtype=torch.float32
-        )
-        near = rewards.reach3d(env, k_pos=10.0)
-        observations.tool_position = lambda _env: torch.tensor(
-            [[0.1, 0.0, 0.02]], dtype=torch.float32
-        )
-        far = rewards.reach3d(env, k_pos=10.0)
-    finally:
-        observations.active_object_position = original_obj
-        observations.tool_position = original_tool
-
-    assert near.item() > far.item()
-    assert torch.allclose(near, torch.tensor([1.0], dtype=torch.float32))
-
-
-def test_align_xy_ignores_z_offset() -> None:
-    """align_xy should only care about planar mismatch."""
-    env = _FakeEnv(num_envs=1)
-    original_obj = observations.active_object_position
-    original_tool = observations.tool_position
-    try:
-        observations.active_object_position = lambda _env: torch.tensor(
-            [[0.01, -0.01, 0.01]], dtype=torch.float32
-        )
-        observations.tool_position = lambda _env: torch.tensor(
-            [[0.01, -0.01, 0.20]], dtype=torch.float32
-        )
-        perfect_xy = rewards.align_xy(env, k_xy=20.0)
-        observations.tool_position = lambda _env: torch.tensor(
-            [[0.04, -0.01, 0.20]], dtype=torch.float32
-        )
-        shifted_xy = rewards.align_xy(env, k_xy=20.0)
-    finally:
-        observations.active_object_position = original_obj
-        observations.tool_position = original_tool
-
-    assert torch.allclose(perfect_xy, torch.tensor([1.0], dtype=torch.float32))
-    assert perfect_xy.item() > shifted_xy.item()
-
-
-def test_tactile_contact_binary_returns_one_when_any_taxel_is_active() -> None:
-    """Binary contact should activate when either finger has any active taxel."""
-    env = _FakeEnv(num_envs=2)
-    env.scene.update(
-        {
-            "robot/left_taxel_force_00": _FakeSensor(
-                torch.tensor([[0.03, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=torch.float32)
-            ),
-            "robot/right_taxel_force_00": _FakeSensor(
-                torch.tensor([[0.0, 0.0, 0.0], [0.06, 0.0, 0.0]], dtype=torch.float32)
-            ),
-        }
-    )
-
-    out = rewards.tactile_contact_binary(
-        env,
-        left_sensor_names=("left_taxel_force_00",),
-        right_sensor_names=("right_taxel_force_00",),
-        threshold=0.05,
-    )
-
-    assert torch.equal(out, torch.tensor([0.0, 1.0], dtype=torch.float32))
 
 
 def test_taxel_coverage_rewards_balanced_multi_taxel_contact() -> None:
@@ -524,75 +457,6 @@ def test_robot_floor_collision_raises_clear_error_when_terrain_missing() -> None
 
     with pytest.raises(RuntimeError, match="terrain geom ids"):
         rewards.robot_floor_collision(env)
-
-
-def test_close_near_object_is_command_value_at_zero_distance() -> None:
-    """close_near_object 在物体重合时退化为归一化命令本身."""
-    env = _FakeEnv(num_envs=1)
-    env.action_manager = SimpleNamespace(
-        get_term=lambda name: SimpleNamespace(command=torch.tensor([[255.0]], dtype=torch.float32))
-    )
-    original_obj = observations.active_object_position
-    original_tool = observations.tool_position
-    try:
-        observations.active_object_position = lambda _env: torch.tensor(
-            [[0.0, 0.0, 0.02]], dtype=torch.float32
-        )
-        observations.tool_position = lambda _env: torch.tensor(
-            [[0.0, 0.0, 0.02]], dtype=torch.float32
-        )
-        out = rewards.close_near_object(env, k_d=30.0)
-    finally:
-        observations.active_object_position = original_obj
-        observations.tool_position = original_tool
-
-    assert torch.allclose(out, torch.tensor([1.0], dtype=torch.float32))
-
-
-def test_close_near_object_decays_to_near_zero_when_far() -> None:
-    """close_near_object 应在远离物体时迅速衰减到接近 0."""
-    env = _FakeEnv(num_envs=1)
-    env.action_manager = SimpleNamespace(
-        get_term=lambda name: SimpleNamespace(command=torch.tensor([[255.0]], dtype=torch.float32))
-    )
-    original_obj = observations.active_object_position
-    original_tool = observations.tool_position
-    try:
-        observations.active_object_position = lambda _env: torch.tensor(
-            [[0.0, 0.0, 0.02]], dtype=torch.float32
-        )
-        observations.tool_position = lambda _env: torch.tensor(
-            [[0.10, 0.0, 0.02]], dtype=torch.float32
-        )
-        out = rewards.close_near_object(env, k_d=30.0)
-    finally:
-        observations.active_object_position = original_obj
-        observations.tool_position = original_tool
-
-    assert out.item() < 0.06
-
-
-def test_close_near_object_is_zero_when_command_is_zero() -> None:
-    """命令为 0（夹爪全张开）时不应得到任何 close 奖励."""
-    env = _FakeEnv(num_envs=1)
-    env.action_manager = SimpleNamespace(
-        get_term=lambda name: SimpleNamespace(command=torch.tensor([[0.0]], dtype=torch.float32))
-    )
-    original_obj = observations.active_object_position
-    original_tool = observations.tool_position
-    try:
-        observations.active_object_position = lambda _env: torch.tensor(
-            [[0.0, 0.0, 0.02]], dtype=torch.float32
-        )
-        observations.tool_position = lambda _env: torch.tensor(
-            [[0.0, 0.0, 0.02]], dtype=torch.float32
-        )
-        out = rewards.close_near_object(env, k_d=30.0)
-    finally:
-        observations.active_object_position = original_obj
-        observations.tool_position = original_tool
-
-    assert torch.allclose(out, torch.tensor([0.0], dtype=torch.float32))
 
 
 @contextmanager

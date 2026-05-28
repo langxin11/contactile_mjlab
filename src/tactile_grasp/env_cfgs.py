@@ -56,20 +56,16 @@ SUCCESS_HEIGHT = 0.08
 SUCCESS_HOLD_STEPS = 25
 
 TACTILE_CONTACT_THRESHOLD = 0.005
-REACH_K_POS = 10.0
-ALIGN_K_XY = 20.0
 HOLD_LIFT_THRESHOLD = 0.03
 
-W_REACH = 0.6
-W_ALIGN = 0.8
-W_CONTACT = 0.2
-W_COVERAGE = 1.2
-W_LIFT_DELTA = 8.0
+STAGED_PICKUP_K_POS = 10.0
+STAGED_PICKUP_K_D = 30.0
+STAGED_PICKUP_LIFT_CAP = 0.08
+
+W_STAGED_PICKUP = 3.0
 W_HOLD = 2.0
 W_FLOOR = -12.0
 W_ACTION_SMOOTHNESS = -0.01
-W_CLOSE_NEAR = 2.5
-CLOSE_NEAR_K_D = 30.0
 W_DROP_PENALTY = -5.0
 
 
@@ -179,35 +175,19 @@ def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
             )
         },
         rewards={
-            "reach3d": RewardTermCfg(
-                func=rewards.reach3d,
-                weight=W_REACH,
-                params={"k_pos": REACH_K_POS},
-            ),
-            "align": RewardTermCfg(
-                func=rewards.align_xy,
-                weight=W_ALIGN,
-                params={"k_xy": ALIGN_K_XY},
-            ),
-            "contact": RewardTermCfg(
-                func=rewards.tactile_contact_binary,
-                weight=W_CONTACT,
+            "staged_pickup": RewardTermCfg(
+                func=rewards.staged_pickup,
+                weight=W_STAGED_PICKUP,
                 params={
+                    "k_pos": STAGED_PICKUP_K_POS,
+                    "k_d": STAGED_PICKUP_K_D,
+                    "lift_cap": STAGED_PICKUP_LIFT_CAP,
                     "left_sensor_names": LEFT_TAXEL_FORCE_SENSOR_NAMES,
                     "right_sensor_names": RIGHT_TAXEL_FORCE_SENSOR_NAMES,
                     "threshold": TACTILE_CONTACT_THRESHOLD,
+                    "action_name": "cartesian_gripper",
                 },
             ),
-            "coverage": RewardTermCfg(
-                func=rewards.taxel_coverage,
-                weight=W_COVERAGE,
-                params={
-                    "left_sensor_names": LEFT_TAXEL_FORCE_SENSOR_NAMES,
-                    "right_sensor_names": RIGHT_TAXEL_FORCE_SENSOR_NAMES,
-                    "threshold": TACTILE_CONTACT_THRESHOLD,
-                },
-            ),
-            "lift_delta": RewardTermCfg(func=rewards.lift_delta, weight=W_LIFT_DELTA),
             "hold": RewardTermCfg(
                 func=rewards.hold_bonus,
                 weight=W_HOLD,
@@ -225,11 +205,6 @@ def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
             "action_smoothness": RewardTermCfg(
                 func=rewards.action_smoothness_l1,
                 weight=W_ACTION_SMOOTHNESS,
-            ),
-            "close_near_object": RewardTermCfg(
-                func=rewards.close_near_object,
-                weight=W_CLOSE_NEAR,
-                params={"k_d": CLOSE_NEAR_K_D, "action_name": "cartesian_gripper"},
             ),
             "drop_penalty": RewardTermCfg(func=rewards.drop_penalty, weight=W_DROP_PENALTY),
         },

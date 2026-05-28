@@ -46,41 +46,6 @@ def action_l2(env: "ManagerBasedRlEnv") -> torch.Tensor:
     return torch.sum(torch.square(env.action_manager.action), dim=1)
 
 
-def reach3d(env: "ManagerBasedRlEnv", k_pos: float) -> torch.Tensor:
-    """Reward tool-object proximity in 3D."""
-    delta = obs.active_object_position(env) - obs.tool_position(env)
-    return torch.exp(-k_pos * torch.linalg.norm(delta, dim=1))
-
-
-def align_xy(env: "ManagerBasedRlEnv", k_xy: float) -> torch.Tensor:
-    """Reward planar alignment between tool and active object."""
-    delta_xy = obs.active_object_position(env)[:, :2] - obs.tool_position(env)[:, :2]
-    return torch.exp(-k_xy * torch.linalg.norm(delta_xy, dim=1))
-
-
-def tactile_contact_binary(
-    env: "ManagerBasedRlEnv",
-    left_sensor_names: tuple[str, ...],
-    right_sensor_names: tuple[str, ...],
-    threshold: float = 0.05,
-    entity_name: str = "robot",
-) -> torch.Tensor:
-    """Return 1 when either fingertip has any active taxel."""
-    left = obs.taxel_contact_count(
-        env,
-        left_sensor_names,
-        entity_name=entity_name,
-        threshold=threshold,
-    )
-    right = obs.taxel_contact_count(
-        env,
-        right_sensor_names,
-        entity_name=entity_name,
-        threshold=threshold,
-    )
-    return ((left + right) > 0).to(torch.float32)
-
-
 def taxel_coverage(
     env: "ManagerBasedRlEnv",
     left_sensor_names: tuple[str, ...],
@@ -147,28 +112,6 @@ def action_smoothness_l1(env: "ManagerBasedRlEnv") -> torch.Tensor:
     if prev_action is None:
         prev_action = torch.zeros_like(env.action_manager.action)
     return torch.sum(torch.abs(env.action_manager.action - prev_action), dim=1)
-
-
-def close_near_object(
-    env: "ManagerBasedRlEnv",
-    k_d: float,
-    action_name: str = "cartesian_gripper",
-) -> torch.Tensor:
-    """根据 tool↔active object 距离对夹爪闭合命令做正向 shaping.
-
-    Args:
-        env: mjlab ``ManagerBasedRlEnv`` 实例.
-        k_d: 距离衰减系数；越大代表"必须越接近物体"才有显著奖励.
-        action_name: 夹爪命令所属的 action term 名称.
-
-    Returns:
-        形状 ``[num_envs]`` 的张量；当 ``tool`` 与 ``active object`` 重合且
-        归一化命令为 1 时取最大值 1.
-    """
-    delta = obs.active_object_position(env) - obs.tool_position(env)
-    proximity = torch.exp(-k_d * torch.linalg.norm(delta, dim=1))
-    command = obs.gripper_command(env, action_name=action_name).squeeze(-1)
-    return proximity * command
 
 
 def _ensure_collision_cache(env: "ManagerBasedRlEnv") -> None:
