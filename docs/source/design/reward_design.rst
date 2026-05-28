@@ -8,9 +8,9 @@
 ----------
 
 奖励项都在 ``env_cfgs.make_tactile_grasp_env_cfg`` 中配置，定义在
-``tactile_grasp.mdp.rewards``。当前是分阶段 shaping 组合，目标是让策略经过
-"对准 → 下探 → 轻触 → 多点接触 → 闭合抬升 → 稳定悬停" 的链路，而不是悬停少动作。
-每一项都是有界的：正向项用 ``exp(-k·d)`` 或 ``0/1`` 二值，负向项直接用负权重。
+``tactile_grasp.mdp.rewards``。当前是 *单项乘法门控级联* 加 *若干独立惩罚项* 的
+组合：bootstrap chain（reach → close → contact → lift）被吸收进
+``staged_pickup``；持有、撞地、掉物、抖动各自作为独立加法项。
 
 .. list-table::
    :header-rows: 1
@@ -19,21 +19,9 @@
    * - 奖励项
      - 权重
      - 当前作用
-   * - ``reach3d``
-     - +0.6
-     - ``exp(-k_pos·‖p_obj − p_tool‖)``，``k_pos = 10``，引导 3D 接近
-   * - ``align``
-     - +0.8
-     - ``exp(-k_xy·‖Δxy‖)``，``k_xy = 20``，鼓励先对准 XY 再下探
-   * - ``contact``
-     - +0.2
-     - 任一 taxel force 范数超过 ``0.005 N`` 即得 1，弱信号防止悬停
-   * - ``coverage``
-     - +1.2
-     - 双指各 3×3 taxel 中激活数比例（左右平均，单边截断到 9）
-   * - ``lift_delta``
-     - +8.0
-     - ``relu(z_obj − z_obj_init)``；reset 时缓存 ``_tactile_active_object_init_z``
+   * - ``staged_pickup``
+     - +3.0
+     - ``reach · (1 + close · (1 + contact · (1 + lift)))``，下方详细展开
    * - ``hold``
      - +2.0
      - 满足 ``lift_delta > 0.03`` 且双指都有 taxel 接触时给 1
@@ -43,12 +31,22 @@
    * - ``action_smoothness``
      - -0.01
      - ``Σ|a_t − a_{t-1}|``，惩罚抖动
-   * - ``close_near_object``
-     - +0.8
-     - ``exp(-30·d_3d) · (u/255)``，鼓励"在物体附近"闭合，bootstrap 闭合行为
    * - ``drop_penalty``
      - -5.0
      - ``object_drop`` 终止时施加 -5
+
+``staged_pickup`` 的四个内部因子（各自落在 ``[0, 1]``，cascade 输出落在
+``[0, 4]``）：
+
+- ``reach = exp(-k_pos · d_aniso)``，``k_pos = 10``
+- ``close = command · exp(-k_d · d_aniso)``，``k_d = 30``
+- ``contact = taxel_coverage``（双指 3×3 taxel 激活比例平均）
+- ``lift = clamp(lift_delta / 0.08, 0, 1)``
+
+其中 ``d_aniso = sqrt(2·(Δx² + Δy²) + Δz²)`` 是 *各向异性* 3D 距离：xy 平方项
+权重是 z 平方项的 2 倍，所以 xy 不对齐时 reach 衰减更快。这一个项替代了之前的
+``reach3d`` / ``align`` / ``close_near_object`` / ``contact`` / ``coverage`` /
+``lift_delta`` 六个加法项。
 
 触觉观测在进入 actor/critic 前会被裁剪到 sensor 物理量程：
 
@@ -110,15 +108,33 @@
 为什么这样组合 reward
 ---------------------
 
-这一版 reward 把 "对准 / 接触 / 抬升 / 稳定" 拆成阶梯式 shaping：
+旧版（加法 bootstrap）的失败模式：policy 学会悬停在物体上方 2-3 cm，半闭夹爪，
+单步只靠 ``reach3d + align + close_near_object`` 就能拿到 ~80% 的可得 shape
+奖励，且没有任何结构性激励去真正下探接触。
 
-1. ``reach3d`` 与 ``align`` 先把夹爪带到物体上方并 XY 对齐
-2. ``contact`` 与 ``coverage`` 鼓励真正轻触并覆盖多 taxel，而不是悬停
-3. ``lift_delta`` 与 ``hold`` 鼓励抬起且要双指都还在接触，避免抛物
-4. ``close_near_object`` 在夹爪降到物体附近（~3cm 内）时正向奖励闭合命令，
-   填补"从张开到产生接触"那段被旧 ``close_command`` 惩罚的 bootstrap 真空
-5. ``floor_collision`` / ``action_smoothness`` / ``drop_penalty`` 惩罚明显
-   错误（撞地、抖动、掉物），都不直接终止 episode
+乘法门控通过 ``reach · (1 + close · (1 + contact · (1 + lift)))`` 强制阶段推进：
+
+1. ``reach`` 是外层门，远离物体时整条 cascade 直接为 0；
+2. ``close`` 只在 reach 已经偏大时才贡献信号，避免"远处闭爪"的伪奖励；
+3. ``contact``（= ``taxel_coverage``）平滑地把接触强度传入；
+4. ``lift`` 在 contact 已发生时才解锁，且在 8 cm（``SUCCESS_HEIGHT``）饱和。
+
+下表给出几个典型阶段的单步奖励（含 ``W_STAGED_PICKUP = 3.0``）：
+
+============================== ====== ====== ======= ===== ======== =======
+阶段                            reach  close  contact lift  cascade  reward
+============================== ====== ====== ======= ===== ======== =======
+Initial (far)                   0.30   0      0       0     0.30     0.90
+Aligned + half-closed hover     0.70   0.14   0       0     0.80     2.40
+First contact (4/9 taxels)      0.95   0.70   0.44    0     1.94     5.83
+Lifted to 4 cm                  0.95   0.90   0.90    0.50  2.80     8.40
+Saturated (≥ 8 cm)              1.00   1.00   1.00    1.00  4.00    12.00
+============================== ====== ====== ======= ===== ======== =======
+
+"悬停刷分"基线（2.40）严格小于"下探到接触"（5.83），policy 必须穿越接触门
+才能拿到更高单步奖励。``hold`` / ``floor_collision`` / ``drop_penalty`` /
+``action_smoothness`` 仍作为独立加法项（不参与 cascade）补足成功条件、
+安全约束与运动平滑性。
 
 仍属于后续增强：
 

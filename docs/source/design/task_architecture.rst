@@ -57,7 +57,7 @@ slide/hinge base joints。
        ├── actions.py       # CartesianMocapAction(Cfg) + RobotiqCommandAction(Cfg)
        ├── actuators.py     # RobotiqGeneralActuator(Cfg) —— XML actuator 包装
        ├── observations.py  # tactile split、pad wrench、vision_proxy、gripper_command
-       ├── rewards.py       # reach3d / align / contact / coverage / lift / hold / penalties
+       ├── rewards.py       # staged_pickup cascade + hold / penalties
        ├── terminations.py  # object_height_below / stable_grasp_hold / workspace
        └── events.py        # pick-lift reset randomization + curriculum
 
@@ -200,15 +200,10 @@ object 相对夹爪的 ``dx/dy/dz``、相对 yaw 的 ``sin/cos``，以及
 ============================== ======= =====================================
 奖励项                          权重    作用
 ============================== ======= =====================================
-``reach3d``                     +0.6    ``exp(-k_pos·‖p_obj − p_tool‖)``
-``align``                       +0.8    ``exp(-k_xy·‖Δxy‖)``
-``contact``                     +0.2    任一 taxel force 范数超 ``0.005 N`` 给 1
-``coverage``                    +1.2    双指 3×3 taxel 激活比例平均
-``lift_delta``                  +8.0    ``relu(z_obj − z_obj_init)``
+``staged_pickup``               +3.0    乘法门控级联 ``reach·(1+close·(1+contact·(1+lift)))``
 ``hold``                        +2.0    抬高且双指均接触时给 1
 ``floor_collision``             -12.0   机器人 geom 撞地 plane 给 1
 ``action_smoothness``           -0.01   ``Σ|a_t − a_{t-1}|``
-``close_near_object``           +0.8    ``exp(-30·d) · (u/255)``，近物时鼓励闭合
 ``drop_penalty``                -5.0    object_drop 触发时 -5
 ============================== ======= =====================================
 
