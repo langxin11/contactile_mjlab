@@ -241,3 +241,39 @@ def tactile_contact(
         entity_name=entity_name,
     )
     return (signal > threshold).float()
+
+
+def staged_pickup(
+    env: "ManagerBasedRlEnv",
+    k_pos: float,
+    k_d: float,
+    lift_cap: float,
+    left_sensor_names: tuple[str, ...],
+    right_sensor_names: tuple[str, ...],
+    threshold: float,
+    action_name: str = "cartesian_gripper",
+    entity_name: str = "robot",
+) -> torch.Tensor:
+    """Multiplicatively-gated bootstrap cascade for the pick-lift chain.
+
+    Returns ``reach * (1 + close * (1 + contact * (1 + lift)))`` with all
+    factors in ``[0, 1]``; output is in ``[0, 4]``.
+
+    The reach factor uses an anisotropic distance with xy weighted twice as
+    heavily as z, so xy alignment dominates over z proximity at equal raw
+    distance.
+    """
+    delta = obs.active_object_position(env) - obs.tool_position(env)
+    d_aniso = torch.sqrt(2.0 * (delta[:, 0] ** 2 + delta[:, 1] ** 2) + delta[:, 2] ** 2)
+    reach = torch.exp(-k_pos * d_aniso)
+    command = obs.gripper_command(env, action_name=action_name).squeeze(-1)
+    close = command * torch.exp(-k_d * d_aniso)
+    contact = taxel_coverage(
+        env,
+        left_sensor_names=left_sensor_names,
+        right_sensor_names=right_sensor_names,
+        threshold=threshold,
+        entity_name=entity_name,
+    )
+    lift = torch.clamp(lift_delta(env) / lift_cap, max=1.0)
+    return reach * (1.0 + close * (1.0 + contact * (1.0 + lift)))

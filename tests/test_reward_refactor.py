@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -592,3 +593,206 @@ def test_close_near_object_is_zero_when_command_is_zero() -> None:
         observations.tool_position = original_tool
 
     assert torch.allclose(out, torch.tensor([0.0], dtype=torch.float32))
+
+
+@contextmanager
+def _staged_pickup_deps(
+    obj_pos: torch.Tensor,
+    tool_pos: torch.Tensor,
+    command: torch.Tensor,
+    coverage: torch.Tensor,
+    lift: torch.Tensor,
+):
+    """Patch the observation/reward primitives that staged_pickup composes."""
+    originals = (
+        observations.active_object_position,
+        observations.tool_position,
+        observations.gripper_command,
+        rewards.taxel_coverage,
+        rewards.lift_delta,
+    )
+    observations.active_object_position = lambda _e: obj_pos
+    observations.tool_position = lambda _e: tool_pos
+    observations.gripper_command = lambda _e, action_name="cartesian_gripper": command
+    rewards.taxel_coverage = lambda _e, **_kw: coverage
+    rewards.lift_delta = lambda _e: lift
+    try:
+        yield
+    finally:
+        (
+            observations.active_object_position,
+            observations.tool_position,
+            observations.gripper_command,
+            rewards.taxel_coverage,
+            rewards.lift_delta,
+        ) = originals
+
+
+def test_staged_pickup_returns_near_zero_at_full_separation() -> None:
+    """staged_pickup should approach zero when tool is far from object and gripper open."""
+    env = _FakeEnv(num_envs=1)
+    with _staged_pickup_deps(
+        obj_pos=torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32),
+        tool_pos=torch.tensor([[0.20, 0.20, 0.30]], dtype=torch.float32),
+        command=torch.tensor([[0.0]], dtype=torch.float32),
+        coverage=torch.tensor([0.0], dtype=torch.float32),
+        lift=torch.tensor([0.0], dtype=torch.float32),
+    ):
+        out = rewards.staged_pickup(
+            env,
+            k_pos=10.0,
+            k_d=30.0,
+            lift_cap=0.08,
+            left_sensor_names=("left_taxel_force_00",),
+            right_sensor_names=("right_taxel_force_00",),
+            threshold=0.005,
+        )
+
+    assert out.item() < 0.01
+
+
+def test_staged_pickup_saturates_at_four_when_all_factors_are_one() -> None:
+    """staged_pickup output equals 4 when every factor saturates at 1."""
+    env = _FakeEnv(num_envs=1)
+    with _staged_pickup_deps(
+        obj_pos=torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32),
+        tool_pos=torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32),
+        command=torch.tensor([[1.0]], dtype=torch.float32),
+        coverage=torch.tensor([1.0], dtype=torch.float32),
+        lift=torch.tensor([0.08], dtype=torch.float32),
+    ):
+        out = rewards.staged_pickup(
+            env,
+            k_pos=10.0,
+            k_d=30.0,
+            lift_cap=0.08,
+            left_sensor_names=("left_taxel_force_00",),
+            right_sensor_names=("right_taxel_force_00",),
+            threshold=0.005,
+        )
+
+    assert torch.allclose(out, torch.tensor([4.0], dtype=torch.float32), atol=1e-5)
+
+
+def test_staged_pickup_is_monotonic_in_each_factor() -> None:
+    """Increasing any single factor (reach/close/contact/lift) strictly increases output."""
+    env = _FakeEnv(num_envs=1)
+    baseline_obj = torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32)
+    baseline_tool = torch.tensor([[0.0, 0.0, 0.05]], dtype=torch.float32)
+    baseline_command = torch.tensor([[0.5]], dtype=torch.float32)
+    baseline_coverage = torch.tensor([0.5], dtype=torch.float32)
+    baseline_lift = torch.tensor([0.02], dtype=torch.float32)
+
+    kwargs = dict(
+        k_pos=10.0,
+        k_d=30.0,
+        lift_cap=0.08,
+        left_sensor_names=("left_taxel_force_00",),
+        right_sensor_names=("right_taxel_force_00",),
+        threshold=0.005,
+    )
+
+    with _staged_pickup_deps(
+        baseline_obj, baseline_tool, baseline_command, baseline_coverage, baseline_lift
+    ):
+        baseline = rewards.staged_pickup(env, **kwargs).item()
+
+    with _staged_pickup_deps(
+        baseline_obj,
+        torch.tensor([[0.0, 0.0, 0.03]], dtype=torch.float32),
+        baseline_command,
+        baseline_coverage,
+        baseline_lift,
+    ):
+        closer = rewards.staged_pickup(env, **kwargs).item()
+    assert closer > baseline, "reach should increase when distance shrinks"
+
+    with _staged_pickup_deps(
+        baseline_obj,
+        baseline_tool,
+        torch.tensor([[0.9]], dtype=torch.float32),
+        baseline_coverage,
+        baseline_lift,
+    ):
+        more_closed = rewards.staged_pickup(env, **kwargs).item()
+    assert more_closed > baseline, "close should increase with gripper command"
+
+    with _staged_pickup_deps(
+        baseline_obj,
+        baseline_tool,
+        baseline_command,
+        torch.tensor([0.9], dtype=torch.float32),
+        baseline_lift,
+    ):
+        more_contact = rewards.staged_pickup(env, **kwargs).item()
+    assert more_contact > baseline, "contact should increase with coverage"
+
+    with _staged_pickup_deps(
+        baseline_obj,
+        baseline_tool,
+        baseline_command,
+        baseline_coverage,
+        torch.tensor([0.05], dtype=torch.float32),
+    ):
+        more_lift = rewards.staged_pickup(env, **kwargs).item()
+    assert more_lift > baseline, "lift should increase with object height gain"
+
+
+def test_staged_pickup_anisotropic_distance_penalizes_xy_offset_more_than_z() -> None:
+    """A 1cm xy offset should reduce the cascade more than a 1cm z offset."""
+    env = _FakeEnv(num_envs=1)
+    obj = torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32)
+    tool_xy_off = torch.tensor([[0.01, 0.0, 0.02]], dtype=torch.float32)
+    tool_z_off = torch.tensor([[0.0, 0.0, 0.03]], dtype=torch.float32)
+    command = torch.tensor([[0.0]], dtype=torch.float32)
+    coverage = torch.tensor([0.0], dtype=torch.float32)
+    lift = torch.tensor([0.0], dtype=torch.float32)
+
+    kwargs = dict(
+        k_pos=10.0,
+        k_d=30.0,
+        lift_cap=0.08,
+        left_sensor_names=("left_taxel_force_00",),
+        right_sensor_names=("right_taxel_force_00",),
+        threshold=0.005,
+    )
+
+    with _staged_pickup_deps(obj, tool_xy_off, command, coverage, lift):
+        xy_off = rewards.staged_pickup(env, **kwargs).item()
+    with _staged_pickup_deps(obj, tool_z_off, command, coverage, lift):
+        z_off = rewards.staged_pickup(env, **kwargs).item()
+
+    assert xy_off < z_off, (
+        f"xy offset should penalize reach more than z offset (xy={xy_off}, z={z_off})"
+    )
+
+
+def test_staged_pickup_lift_saturates_at_cap() -> None:
+    """Lifting beyond lift_cap should not increase the cascade further."""
+    env = _FakeEnv(num_envs=1)
+    obj = torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32)
+    tool = torch.tensor([[0.0, 0.0, 0.02]], dtype=torch.float32)
+    command = torch.tensor([[1.0]], dtype=torch.float32)
+    coverage = torch.tensor([1.0], dtype=torch.float32)
+
+    kwargs = dict(
+        k_pos=10.0,
+        k_d=30.0,
+        lift_cap=0.08,
+        left_sensor_names=("left_taxel_force_00",),
+        right_sensor_names=("right_taxel_force_00",),
+        threshold=0.005,
+    )
+
+    with _staged_pickup_deps(
+        obj, tool, command, coverage, torch.tensor([0.08], dtype=torch.float32)
+    ):
+        at_cap = rewards.staged_pickup(env, **kwargs).item()
+    with _staged_pickup_deps(
+        obj, tool, command, coverage, torch.tensor([0.20], dtype=torch.float32)
+    ):
+        beyond_cap = rewards.staged_pickup(env, **kwargs).item()
+
+    assert torch.allclose(torch.tensor(at_cap), torch.tensor(beyond_cap), atol=1e-5), (
+        f"cascade should saturate at lift_cap (at_cap={at_cap}, beyond_cap={beyond_cap})"
+    )
