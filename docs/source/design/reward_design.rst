@@ -40,7 +40,7 @@
 
 - ``reach = exp(-k_pos · d_aniso)``，``k_pos = 10``
 - ``close = command · exp(-k_d · d_aniso)``，``k_d = 30``
-- ``contact = taxel_coverage``（双指 3×3 taxel 激活比例平均）
+- ``contact = taxel_coverage``\ （双指 3×3 taxel 激活比例平均）
 - ``lift = clamp(lift_delta / 0.08, 0, 1)``
 
 其中 ``d_aniso = sqrt(2·(Δx² + Δy²) + Δz²)`` 是 *各向异性* 3D 距离：xy 平方项
@@ -122,15 +122,52 @@
 下表给出几个典型阶段的单步奖励（含 ``W_STAGED_PICKUP = 3.0``，``k_pos = 10``，
 ``k_d = 30``，``lift_cap = 0.08``）：
 
-============================== ====== ====== ======= ===== ======== =======
-阶段                            reach  close  contact lift  cascade  reward
-============================== ====== ====== ======= ===== ======== =======
-Initial (far)                   0.30   0      0       0     0.30     0.90
-Aligned + half-closed hover     0.70   0.14   0       0     0.80     2.40
-First contact (4/9 taxels)      0.95   0.70   0.44    0     1.91     5.72
-Lifted to 4 cm                  0.95   0.90   0.90    0.50  2.96     8.88
-Saturated (≥ 8 cm)              1.00   1.00   1.00    1.00  4.00    12.00
-============================== ====== ====== ======= ===== ======== =======
+.. list-table::
+   :header-rows: 1
+   :widths: 24 10 10 11 10 12 12
+
+   * - 阶段
+     - reach
+     - close
+     - contact
+     - lift
+     - cascade
+     - reward
+   * - Initial (far)
+     - 0.30
+     - 0
+     - 0
+     - 0
+     - 0.30
+     - 0.90
+   * - Aligned + half-closed hover
+     - 0.70
+     - 0.14
+     - 0
+     - 0
+     - 0.80
+     - 2.40
+   * - First contact (4/9 taxels)
+     - 0.95
+     - 0.70
+     - 0.44
+     - 0
+     - 1.91
+     - 5.72
+   * - Lifted to 4 cm
+     - 0.95
+     - 0.90
+     - 0.90
+     - 0.50
+     - 2.96
+     - 8.88
+   * - Saturated (≥ 8 cm)
+     - 1.00
+     - 1.00
+     - 1.00
+     - 1.00
+     - 4.00
+     - 12.00
 
 "悬停刷分"基线（2.40）严格小于"下探到接触"（5.72），policy 必须穿越接触门
 才能拿到更高单步奖励。``hold`` / ``floor_collision`` / ``drop_penalty`` /
