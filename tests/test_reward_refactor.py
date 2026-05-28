@@ -240,7 +240,7 @@ def test_lift_delta_is_zero_at_table_height_and_positive_when_raised() -> None:
 
 
 def test_pick_lift_cfg_uses_new_reward_term_names() -> None:
-    """Registered env cfg should expose the staged reward composition names."""
+    """Registered env cfg 应使用新的奖励项命名（含 close_near_object）."""
     cfg = load_env_cfg(play=False)
 
     reward_terms = cfg.rewards
@@ -254,12 +254,12 @@ def test_pick_lift_cfg_uses_new_reward_term_names() -> None:
         "hold",
         "floor_collision",
         "action_smoothness",
-        "close_command",
+        "close_near_object",
         "drop_penalty",
     ):
         assert name in reward_terms, name
 
-    for name in ("alive", "reach_xy", "lift_height", "tactile_force"):
+    for name in ("alive", "reach_xy", "lift_height", "tactile_force", "close_command"):
         assert name not in reward_terms, name
 
 
@@ -309,20 +309,6 @@ def test_action_smoothness_l1_uses_current_minus_previous_action() -> None:
     out = rewards.action_smoothness_l1(env)
 
     assert torch.allclose(out, torch.tensor([1.0, 1.75], dtype=torch.float32))
-
-
-def test_close_command_penalty_grows_with_command() -> None:
-    """close_command_l2 should increase with larger normalized close command."""
-    env = _FakeEnv(num_envs=2)
-    env.action_manager = SimpleNamespace(
-        get_term=lambda name: SimpleNamespace(
-            command=torch.tensor([[0.0], [255.0]], dtype=torch.float32)
-        )
-    )
-
-    out = rewards.close_command_l2(env)
-
-    assert torch.allclose(out, torch.tensor([0.0, 1.0], dtype=torch.float32))
 
 
 def test_reach3d_uses_tool_to_object_distance() -> None:

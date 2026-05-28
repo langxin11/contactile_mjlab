@@ -37,7 +37,7 @@ def test_rewards_exports():
         "lift_delta",
         "hold_bonus",
         "action_smoothness_l1",
-        "close_command_l2",
+        "close_near_object",
         "robot_floor_collision",
         "drop_penalty",
     ):

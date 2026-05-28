@@ -149,15 +149,6 @@ def action_smoothness_l1(env: "ManagerBasedRlEnv") -> torch.Tensor:
     return torch.sum(torch.abs(env.action_manager.action - prev_action), dim=1)
 
 
-def close_command_l2(
-    env: "ManagerBasedRlEnv",
-    action_name: str = "cartesian_gripper",
-) -> torch.Tensor:
-    """惩罚多余的夹爪闭合命令."""
-    command = obs.gripper_command(env, action_name=action_name)
-    return torch.sum(torch.square(command), dim=1)
-
-
 def close_near_object(
     env: "ManagerBasedRlEnv",
     k_d: float,

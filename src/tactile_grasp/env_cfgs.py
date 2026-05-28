@@ -55,7 +55,7 @@ DROP_HEIGHT = 0.002
 SUCCESS_HEIGHT = 0.08
 SUCCESS_HOLD_STEPS = 25
 
-TACTILE_CONTACT_THRESHOLD = 0.05
+TACTILE_CONTACT_THRESHOLD = 0.005
 REACH_K_POS = 10.0
 ALIGN_K_XY = 20.0
 HOLD_LIFT_THRESHOLD = 0.03
@@ -68,7 +68,8 @@ W_LIFT_DELTA = 8.0
 W_HOLD = 2.0
 W_FLOOR = -12.0
 W_ACTION_SMOOTHNESS = -0.01
-W_CLOSE_COMMAND = -0.05
+W_CLOSE_NEAR = 0.8
+CLOSE_NEAR_K_D = 30.0
 W_DROP_PENALTY = -5.0
 
 
@@ -225,10 +226,10 @@ def make_tactile_grasp_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
                 func=rewards.action_smoothness_l1,
                 weight=W_ACTION_SMOOTHNESS,
             ),
-            "close_command": RewardTermCfg(
-                func=rewards.close_command_l2,
-                weight=W_CLOSE_COMMAND,
-                params={"action_name": "cartesian_gripper"},
+            "close_near_object": RewardTermCfg(
+                func=rewards.close_near_object,
+                weight=W_CLOSE_NEAR,
+                params={"k_d": CLOSE_NEAR_K_D, "action_name": "cartesian_gripper"},
             ),
             "drop_penalty": RewardTermCfg(func=rewards.drop_penalty, weight=W_DROP_PENALTY),
         },
