@@ -27,7 +27,7 @@
      - ``exp(-k_xy·‖Δxy‖)``，``k_xy = 20``，鼓励先对准 XY 再下探
    * - ``contact``
      - +0.2
-     - 任一 taxel force 范数超过 ``0.05 N`` 即得 1，弱信号防止悬停
+     - 任一 taxel force 范数超过 ``0.005 N`` 即得 1，弱信号防止悬停
    * - ``coverage``
      - +1.2
      - 双指各 3×3 taxel 中激活数比例（左右平均，单边截断到 9）
@@ -43,9 +43,9 @@
    * - ``action_smoothness``
      - -0.01
      - ``Σ|a_t − a_{t-1}|``，惩罚抖动
-   * - ``close_command``
-     - -0.05
-     - ``(u / 255)^2``，惩罚多余的闭合命令
+   * - ``close_near_object``
+     - +0.8
+     - ``exp(-30·d_3d) · (u/255)``，鼓励"在物体附近"闭合，bootstrap 闭合行为
    * - ``drop_penalty``
      - -5.0
      - ``object_drop`` 终止时施加 -5
@@ -115,8 +115,10 @@
 1. ``reach3d`` 与 ``align`` 先把夹爪带到物体上方并 XY 对齐
 2. ``contact`` 与 ``coverage`` 鼓励真正轻触并覆盖多 taxel，而不是悬停
 3. ``lift_delta`` 与 ``hold`` 鼓励抬起且要双指都还在接触，避免抛物
-4. ``floor_collision`` / ``action_smoothness`` / ``close_command`` / ``drop_penalty``
-   惩罚明显错误（撞地、抖动、空闭合、掉物），但都不直接终止 episode
+4. ``close_near_object`` 在夹爪降到物体附近（~3cm 内）时正向奖励闭合命令，
+   填补"从张开到产生接触"那段被旧 ``close_command`` 惩罚的 bootstrap 真空
+5. ``floor_collision`` / ``action_smoothness`` / ``drop_penalty`` 惩罚明显
+   错误（撞地、抖动、掉物），都不直接终止 episode
 
 仍属于后续增强：
 

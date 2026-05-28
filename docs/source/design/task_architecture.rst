@@ -202,13 +202,13 @@ object 相对夹爪的 ``dx/dy/dz``、相对 yaw 的 ``sin/cos``，以及
 ============================== ======= =====================================
 ``reach3d``                     +0.6    ``exp(-k_pos·‖p_obj − p_tool‖)``
 ``align``                       +0.8    ``exp(-k_xy·‖Δxy‖)``
-``contact``                     +0.2    任一 taxel force 范数超 ``0.05 N`` 给 1
+``contact``                     +0.2    任一 taxel force 范数超 ``0.005 N`` 给 1
 ``coverage``                    +1.2    双指 3×3 taxel 激活比例平均
 ``lift_delta``                  +8.0    ``relu(z_obj − z_obj_init)``
 ``hold``                        +2.0    抬高且双指均接触时给 1
 ``floor_collision``             -12.0   机器人 geom 撞地 plane 给 1
 ``action_smoothness``           -0.01   ``Σ|a_t − a_{t-1}|``
-``close_command``               -0.05   归一化命令 ``(u/255)^2``
+``close_near_object``           +0.8    ``exp(-30·d) · (u/255)``，近物时鼓励闭合
 ``drop_penalty``                -5.0    object_drop 触发时 -5
 ============================== ======= =====================================
 
